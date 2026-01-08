@@ -1,0 +1,136 @@
+# CONTEXT ABOUT CyML
+- CyML is a strict, statically-typed subset of Cython aimed at numerical modeling.
+- Only a limited subset of Cython is allowed:
+	- Basic types: int, float, double, boolean and str.
+	- Containers: fixed-size arrays and typed lists; ideally use Cython memoryviews arrays.
+	- Control flow: if, for, while, return.
+- No dynamic Python features.
+
+
+- No comprehensions, generators, context managers, or dynamic attribute creation. !!!!
+
+
+- All function arguments and local variables must be explicitly typed (cdef for locals, def for functions).
+- Only function-based style, no class allowed.
+- Avoid generic/untyped containers; always choose typed versions.
+
+# OUTPUT
+Output a single CyML code as plain code block. Do not include any extra text, explanations, or keys.
+Optionally, add in comments a short summary explaining any nontrivial changes or assumptions.
+
+# GENERAL RULES
+- Parse and understand the Python module.
+- Infer types from:
+	- Literal values (0 → int, 0.0 → double).
+	- Operations (a + b where a is double and b is double → result double).
+	- Numpy arrays / lists of numbers → typed arrays or memoryviews.
+	- Where the type is ambiguous, choose a reasonable default (e.g., double for numeric, int for indices).
+- Apply syntactic and semantic restrictions.
+- Replace unsupported constructs with:
+	- Equivalent loops instead of comprehensions.
+	- Explicit loops instead of sum(...), max(...) if applied to lists.
+	- Manual state updates instead of dynamic attribute manipulation.
+- Avoid unused imports or variables.
+- Maintain the same algorithmic behavior (numerically) as the original Python, within reasonable floating-point differences.
+- Check :
+	- All variables are declared before use (cdef).
+	- All functions have consistent return types on all code paths.
+	- No dynamic features remain.
+	- Control flow is equivalent.
+
+
+# DETAILED MAPPING RULES
+1. Modules
+- Remove script-style code executed at import (e.g. under if __name__ == "__main__":).
+
+2. Types and Variables
+Top-level constants
+	Example:
+	PI = 3.141592653589793
+	to
+	cdef double PI = 3.141592653589793
+	
+Function arguments and return types
+	Python:
+	def f(a, b):
+		return a + b
+	CyML:
+	def f(double a, double b):
+		cdef double result 
+		result = a + b
+		return result
+		
+Local variables
+	x = 0.0
+	for i in range(n):
+		x += arr[i]
+	to
+	cdef double x
+	cdef int i
+	x = 0.0
+	for i in range(n):
+		x += arr[i]
+
+3. Arrays and Collections
+Lists of numbers (fixed or known size)
+	Python:
+	def sum_list(xs):
+		s = 0.0
+		for x in xs:
+			s += x
+		return s
+	CyML:
+	def sum_list(doublearray xs):
+		cdef double s
+		cdef int i
+		s = 0.0
+		for i in range(len(xs)):
+			s = s + xs[i]
+		return s
+
+Dictionaries / sets
+Avoid. If the original algorithm uses them heavily, you must:
+Explicitly state they are not supported in CyML and leave that part commented.
+
+4. Built-ins and Libraries
+Math functions
+Replace with C-level equivalents:
+math.sqrt(x) → sqrt(x) from libc.math.
+
+Aggregations
+sum(list_or_array) → explicit loop.
+max, min on sequences → explicit loop with initial value.
+any, all → boolean loop with early exit if allowed.
+
+Exceptions
+Replace with manual checks and flags.
+
+5. Error Handling and Clarifications
+Choose conservative defaults:
+double for numerical.
+Convert None returns to a special numeric value (e.g., -9999.0) if absolutely necessary, and document it.
+Flag unsupported patterns
+
+
+# PROCEDURE
+- Parse and understand the Python module.
+- Extract module elements:
+	- Identify functions, classes, constants, and main execution block.
+- For each function:
+	- Determine argument types and return type.
+	- Identify local variables and infer types.
+	- Replace dynamic features with static equivalents or flag them.
+	- Rewrite loops and comprehensions into simple for/while loops.
+	- Replace library calls with CyML-compatible equivalents.
+- For arrays/containers:
+	- Convert numeric sequences to typed arrays or memoryviews.
+	- Remove/replace operations that depend on Python’s dynamic behavior.
+- Assemble the CyML file:
+	- Add necessary cimports (math, cython, etc.).
+	- Define constants and global variables with cdef.
+	- Define functions in a top-down order respecting dependencies.
+- Validate logically:
+	- Check for undeclared variables.
+	- Check that every function returns the correct type on all paths.
+	- Check consistency in algorithmic behavior.
+- Ensure no Python-only features remain.
