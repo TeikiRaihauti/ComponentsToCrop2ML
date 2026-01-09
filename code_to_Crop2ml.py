@@ -13,15 +13,12 @@ import shutil
 
 # TO-DO
 #-----------------------------------------------------------------
-#1 - Integration into Crop2ML
-#1.1   - Get arguments from the command line (input folder output_folder -main_files)
-#2 - Composite model support (prompt + response from GPT)
-#3 - Add error handling for
-#3.1   - Instructions extraction
-#3.2   - File reading
-#3.3   - Prompt creation
-#3.4   - Response from GPT (process not found, etc...)
-#4 - Documentation
+#1 - Add error handling for
+#1.1   - Instructions extraction
+#1.2   - File reading
+#1.3   - Prompt creation
+#1.4   - Response from GPT (process not found, etc...)
+#2 - Documentation
 #-----------------------------------------------------------------
 
 #-----------------------------------------------------------------
