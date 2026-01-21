@@ -94,5 +94,3 @@ Each agent configuration file should contain detailed instructions for the respe
 - **Agent-CyMLTranspile.txt**: Instructions to convert Python to CyML
 - **Agent-CompositeMeta.txt**: Instructions to analyze composite model structure and links
 - **Agent-PyConsensus.txt**: Instructions to merge multiple code versions into consensus
-3. Enhanced error handling for instruction extraction, file reading, and GPT responses
-4. Comprehensive documentation with examples
