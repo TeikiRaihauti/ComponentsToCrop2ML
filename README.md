@@ -49,41 +49,6 @@ python code_to_Crop2ml.py -u surface_temperature.cs -u soil_layers_temeprature.c
 ```
 Generates a soil temperature model combining surface and soil layers temperature modules.
 
-## Output Structure
-
-The script generates the following directory structure:
-
-```
-output_folder/
-├── model_name/
-│   ├── crop2ml/
-│   │   ├── unit.*.xml
-│   │   ├── composition.*.xml
-│   │   └── algo/
-│   │       └── pyx/
-│   │           ├── init_*.pyx
-│   │           ├── process.pyx
-│   │           └── *.pyx (other functions)
-│   ├── src/
-│   │   └── py/
-│   │       ├── init_*.py
-│   │       ├── process.py
-│   │       └── *.py (other functions)
-│   └── (other cookiecutter-generated files)
-├── *.json (metadata files)
-└── *.py (refactored code files)
-```
-
-## Dependencies
-
-- `openai`: GPT API client
-- `pathlib`: Path handling
-- `json`: JSON parsing/generation
-- `xml.etree.ElementTree`: XML creation
-- `ast`: Python code parsing
-- `cookiecutter`: Project template generation
-- `argparse`: Command-line argument parsing
-
 ## Configuration Files Required
 
 Each agent configuration file should contain detailed instructions for the respective GPT agent:
@@ -93,4 +58,4 @@ Each agent configuration file should contain detailed instructions for the respe
 - **Agent-AlgoMeta.txt**: Instructions to analyze algorithm structure (init, process, inputs, outputs, tests)
 - **Agent-CyMLTranspile.txt**: Instructions to convert Python to CyML
 - **Agent-CompositeMeta.txt**: Instructions to analyze composite model structure and links
-- **Agent-PyConsensus.txt**: Instructions to merge multiple code versions into consensus
+- **API_KEY_PATH**: The path of the OpenAi API's key
