@@ -1,6 +1,7 @@
 from pathlib import Path
 import xml.dom.minidom
 import xml.etree.ElementTree as ET
+import os
 from utilities import extract_text
 
 #-----------------------------------------------------------------
@@ -90,15 +91,33 @@ def add_inputs(xml_inputs, json_inputs):
     else:
       attrs['variablecategory'] = str(input.get('category', ''))
     attrs['datatype'] = str(input.get('datatype', ''))
-    if input.get('datatype') == "DOUBLEARRAY" or input.get('datatype') == "DOUBLELIST":
+    if "ARRAY" in str(input.get('datatype')).upper() or "LIST" in str(input.get('datatype')).upper():
       attrs['len'] = str(input.get('len', ''))
     attrs['max'] = str(input.get('max', ''))
     attrs['min'] = str(input.get('min', ''))
     attrs['default'] = str(input.get('default', ''))
-    if str(input.get('default')) == "-":
-      attrs['default'] = ""
     attrs['unit'] = str(input.get('unit', ''))
     attrs['uri'] = str(input.get('uri', ''))
+    
+    if str(input.get('default')) == "-" or str(input.get('default')) == "None":
+      attrs['default'] = ""
+    if str(input.get('max')) == "-" or str(input.get('max')) == "None":
+      attrs['max'] = ""
+    if str(input.get('min')) == "-" or str(input.get('min')) == "None":
+      attrs['min'] = ""
+
+    # Validate that default, max, min are numerical when datatype is numerical
+    numerical_types = ['DOUBLE', 'DOUBLELIST', 'DOUBLEARRAY', 'INTEGER', 'INTEGERLIST', 'INTEGERARRAY']
+    is_numerical_datatype = any(numeric_type in str(input.get('datatype', '')).upper() for numeric_type in numerical_types)
+    
+    if is_numerical_datatype:
+      for attr_key in ['default', 'max', 'min', "len"]:
+        attr_value = attrs.get(attr_key, '')
+        if attr_value and attr_value != '':
+          try:
+            float(attr_value)
+          except ValueError:
+            attrs[attr_key] = ""
 
     ET.SubElement(xml_inputs, 'Input', attrs)
 
@@ -115,12 +134,26 @@ def add_outputs(xml_outputs, json_outputs):
       'variablecategory': str(output.get('category', '')),
       'datatype': str(output.get('datatype', ''))
     }
-    if output.get('datatype') == 'DOUBLEARRAY' or output.get('datatype') == 'DOUBLELIST':
+    if "ARRAY" in str(output.get('datatype')).upper() or "LIST" in str(output.get('datatype')).upper():
       attrs['len'] = str(output.get('len', ''))
     attrs['max'] = str(output.get('max', ''))
     attrs['min'] = str(output.get('min', ''))
     attrs['unit'] = str(output.get('unit', ''))
     attrs['uri'] = str(output.get('uri', ''))
+
+    # Validate that default, max, min are numerical when datatype is numerical
+    numerical_types = ['DOUBLE', 'DOUBLELIST', 'DOUBLEARRAY', 'INTEGER', 'INTEGERLIST', 'INTEGERARRAY']
+    is_numerical_datatype = any(numeric_type in str(output.get('datatype', '')).upper() for numeric_type in numerical_types)
+    
+    if is_numerical_datatype:
+      for attr_key in ['default', 'max', 'min', "len"]:
+        attr_value = attrs.get(attr_key, '')
+        if attr_value and attr_value != '':
+          try:
+            float(attr_value)
+          except ValueError:
+            attrs[attr_key] = ""
+
     ET.SubElement(xml_outputs, 'Output', attrs)
 
 
@@ -254,13 +287,33 @@ def convert_composite(file_path, json_metadata, XML_units):
 # Function to create Crop2ML XML file from JSON metadata and algorithm
 # This function generates a Crop2ML XML file from given JSON metadata and algorithm.
 #-----------------------------------------------------------------
-def json_to_XML_unit(model_composite, output_path, json_metadata, json_algo):
+def json_to_XML_unit(model_composite, output_path, json_metadata, json_algo, log_file):
   metadata = json_metadata['metadata']
   xml_path = output_path + "/" + "unit." + metadata['Title'] + ".xml"
   xml_data = convert_unit(model_composite, json_metadata, json_algo)
   dom = xml.dom.minidom.parseString(xml_data.decode('utf-8') if isinstance(xml_data, bytes) else xml_data)
   with open(xml_path, 'w', encoding='utf-8') as f:
     f.write(dom.toprettyxml())
+
+  # Write comments from json_algo into the log file (append)
+  comments = json_algo.get('comments', [])
+  try:
+    log_path = os.path.join(output_path, log_file)
+    with open(log_path, 'a', encoding='utf-8') as lf:
+      lf.write(f"--- {metadata['Title']} ---\n")
+      if isinstance(comments, str):
+        lf.write(comments + "\n")
+      elif isinstance(comments, list):
+        for c in comments:
+          if isinstance(c, dict):
+            comment_text = c.get('comment', str(c))
+            lf.write(comment_text + "\n")
+          else:
+            lf.write(str(c) + "\n")
+      lf.write("\n")
+  except Exception:
+    pass
+
   return xml_path
 
 

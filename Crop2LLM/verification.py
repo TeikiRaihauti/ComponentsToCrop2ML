@@ -44,7 +44,7 @@ def check_code_generated(model_package, languages):
           except Exception as e:
             print(f"Error generating AST for {file} in language {language}: {e}")
             raise
-          
+
           try:
             test.to_source()
           except Exception as e: 
@@ -55,7 +55,7 @@ def check_code_generated(model_package, languages):
 #-----------------------------------------------------------------
 # Simulation section
 #-----------------------------------------------------------------
-LANGUAGES = ['cs','cpp','py','f90','java','simplace','sirius', 'openalea','apsim','dssat','stics','bioma']
+LANGUAGES = ['r', 'cs','cpp','py','f90','java', 'openalea','apsim','dssat','stics','bioma','sirius']
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(description="Package crop2ml")
@@ -65,11 +65,7 @@ if __name__ == "__main__":
   
   # Verify the transpiled code
   print("Checking if code generated is correct...")
-  try:
-    check_code_generated(package, LANGUAGES)
-  except Exception as e:
-    print(f"Error during transpilation: {e}")
-    raise
+  check_code_generated(package, LANGUAGES)
 
   # Transpile in all languages
   for language in LANGUAGES:

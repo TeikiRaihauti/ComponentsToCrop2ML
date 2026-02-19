@@ -12,17 +12,30 @@ Only local, function-internal temporaries may be declared with cdef.
 1. Allowed language features
 - CyML is a strict, statically typed subset of Cython designed for numerical modeling.
 - Only a limited subset of Cython is allowed:
-	- Basic types: int, float, boolean and str.
-	- Containers: fixed-size arrays and typed lists; (e.g. intarray, floatarray).
+	- Basic types: int, float, bool and str.
+	- Containers: fixed-size and typed lists; (e.g. intlist, floatlist).
 	- Control flow: if, for, while, return.
+- Only a limited of basic math functions are allowed :
+	- log
+	- sin
+	- cos
+	- tan
+	- acos
+	- asin
+	- atan
+	- sqrt
+	- ceil
+	- exp
+	- floor
 
 2. Forbidden features
 	- Dynamic Python features.
 	- Comprehensions, generators, context managers.
 	- Dynamic attribute creation.
 	- Untyped or generic containers.
-	- Exceptions (must be replaced by explicit checks)
-	- Imports (must be removed)
+	- Exceptions (must be replaced by explicit checks).
+	- Imports (must be removed).
+	- global keyword is prohibited, better pass variables by signature.
 
 # FUNCTION DEFINITION RULES (HARD REQUIREMENTS)
 All functions must strictly follow these formatting and structural rules:
@@ -37,6 +50,7 @@ All functions must strictly follow these formatting and structural rules:
 	- The return statement must be a single line.
 	- No multi-line expressions or conditional returns.
 	- Variables returned must have exactly the same name as in the original Python.
+	- Return types can't be None/void. Find a suitable return value (or -999.0 by default).
 
 3. Local variables (cdef rules)
 	- Declare every local temporary variable before first use with cdef.
@@ -58,7 +72,7 @@ Optionally include brief comments inside the code to document nontrivial substit
 - Infer types from:
 	- Literal values (0 → int, 0.0 → float).
 	- Operations (a + b where a is float and b is float → result float).
-	- Arrays / lists of numbers → typed arrays.
+	- Arrays / lists of numbers → typed lists.
 	- Where the type is ambiguous, choose a reasonable default (e.g., float for numeric, int for indices).
 - Apply syntactic and semantic restrictions.
 - Replace unsupported constructs with:
@@ -115,7 +129,7 @@ Lists of numbers (fixed or known size)
 		return s
 	CyML:
 	def sum_list():
-		cdef floatarray xs
+		cdef floatlist xs
 		cdef double s
 		cdef int i
 		xs = array('f', [0.0]*5)
@@ -127,7 +141,17 @@ Lists of numbers (fixed or known size)
 Dictionaries / sets
 Avoid. If the original algorithm uses them heavily, you must explicitly state they are not supported in CyML and leave that part commented.
 
-4. Built-ins and Libraries
+4. Functions call
+	Python:
+	def sum_func(a, b):
+		res = sum(number1=a, number2=b)
+		return res
+	CyML:
+	def sum_func(float a, float b):
+		res = sum(a,b)
+		return res
+
+5. Built-ins and Libraries
 Math functions
 Replace with C-level equivalents:
 math.sqrt(x) → sqrt(x).
@@ -135,15 +159,15 @@ math.sqrt(x) → sqrt(x).
 Aggregations
 sum(list_or_array) → explicit loop.
 max, min on sequences → explicit loop with initial value.
-any, all → boolean loop with early exit if allowed.
+any, all → bool loop with early exit if allowed.
 
 Exceptions
 Replace with manual checks and flags.
 
-5. Error Handling and Clarifications
+6. Error Handling and Clarifications
 Choose conservative defaults:
 float for numerical.
-Convert None returns to a special numeric value (e.g., -9999.0) if absolutely necessary, and document it.
+Convert None returns to a special numeric value (e.g., -999.0) if absolutely necessary, and document it.
 Flag unsupported patterns
 
 

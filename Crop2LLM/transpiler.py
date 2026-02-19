@@ -33,13 +33,14 @@ def dedent_one_level(code):
 # Function to extract functions from a Python code string and transpile each to a separate file
 # This function parses the Python code string, detects each function definition, and transpiles them in a new file containing only that function.
 #-----------------------------------------------------------------
-def transpile_functions(python_code, algo_meta, desc_meta, api_key_path, model, agent_cymltranspile, model_composite, output_folder):
+def transpile_functions(python_code, algo_meta, desc_meta, api_key_path, model, agent_cymltranspile, output_folder):
   try:
     tree = ast.parse(python_code)
   except SyntaxError as e:
     print(f"Syntax error in code: {e}")
     return
   
+  functions_transpiled = []
   functions = []
   functions.append(algo_meta.get('init', {}).get('name'))
   functions.append(algo_meta.get('process', {}).get('name'))
@@ -67,6 +68,15 @@ def transpile_functions(python_code, algo_meta, desc_meta, api_key_path, model, 
         else:
           file_name = function_name
 
-        file_path = os.path.join(output_folder, f"{Path(model_composite).stem}/crop2ml/algo/pyx/{file_name}.pyx")
-        with open(file_path, 'w', encoding='utf-8') as f:
-          f.write(cyml)
+        if cyml and cyml.strip():
+          file_path = os.path.join(output_folder, f"{file_name}.pyx")
+          functions_transpiled.append(file_path)
+          with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(cyml)
+        else:
+          if function_name == algo_meta.get('init', {}).get('name'):
+            algo_meta['init'] = '-'
+          else:
+            algo_meta['functions'] = [f for f in algo_meta['functions'] if f.get('name') != function_name]
+            
+  return functions_transpiled

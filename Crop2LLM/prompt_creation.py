@@ -5,13 +5,18 @@ from utilities import extract_text
 # Function to create a prompt adapted to Agent-DescMeta/Agent-PyRefactor
 # This function constructs a prompt based on the main file and the programming language.
 #-----------------------------------------------------------------
-def prompt_unit(main_file, language_name):
+def prompt_unit(main_file, language_name, helper_files):
   main_file_name = os.path.basename(main_file)
   
   prompt = f"Analyze the following crop model source code, written in {language_name}. The main file to process is {main_file_name}.\n"
-  prompt += f"The content is marked clearly with --- START FILE --- at the start and --- END FILE --- at the end.\n"
+  prompt += f"The content is marked clearly with --- START MAIN FILE --- at the start and --- END MAIN FILE --- at the end.\n"
+  if helper_files:
+    prompt += f"Additional files are provided to give more context about the model.\n"
+    prompt += f"Each helper file is marked clearly with --- START HELPER FILE N--- at the start and --- END HELPER FILE N --- at the end.\n"
   prompt += f"Follow the system instructions.\n\n"
-  prompt += f"--- START FILE ---\n{extract_text(main_file)}\n--- END FILE ---"
+  prompt += f"--- START MAIN FILE ---\n{extract_text(main_file)}\n--- END MAIN FILE ---"
+  for i, helper_file in enumerate(helper_files):
+    prompt += f"\n\n--- START HELPER FILE {i+1} ---\n{extract_text(helper_file)}\n--- END HELPER FILE {i+1} ---"
   
   return prompt
 
@@ -50,9 +55,9 @@ def prompt_composite(XML_files, composite):
     prompt += f"Analyze the following file representing the composite crop model and follow the system instructions.\n"
     prompt += f"The composite is marked clearly with --- START COMPOSITE --- at the start and --- END COMPOSITE --- at the end.\n\n"
     prompt += f"--- START COMPOSITE ---\n{extract_text(composite)}\n--- END COMPOSITE ---\n\n"
-  else :
-    prompt += f"Analyze the following XML representing the model units of a composite crop model and follow the system instructions.\n"
-    prompt += f"Each file is marked clearly with --- START FILE --- at the start and --- END FILE --- at the end.\n\n"
+
+  prompt += f"Analyze the following XML representing the model units of a composite crop model and follow the system instructions.\n"
+  prompt += f"Each file is marked clearly with --- START FILE --- at the start and --- END FILE --- at the end.\n\n"
 
   for file in XML_files:
     prompt += f"--- START FILE ---\n{extract_text(file)}\n--- END FILE ---\n\n"

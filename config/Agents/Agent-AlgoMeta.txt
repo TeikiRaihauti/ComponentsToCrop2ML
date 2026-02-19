@@ -10,6 +10,7 @@ Output a single JSON object. Do not include any extra text, explanations, or key
 - If something is missing or not applicable, write "-".
 - Be exhaustive per the classification rules.
 - A state variable is always an input and an output.
+- Length of a collection should be a fixed value or a variable clearly defined in the JSON.
 
 # DEFINITIONS
 - Parameter: Constant configuration value (unchanged during a run unless explicitly reconfigured).
@@ -44,7 +45,7 @@ Output a single JSON object. Do not include any extra text, explanations, or key
 	- description
 	- input type (parameter or variable)
 	- category (constant if parameter; if variable, specify whether it is state, rate, exogenous, or auxiliary)
-	- data type (INT, DOUBLE, DOUBLEARRAY, DOUBLELIST, CHAR, DATE, INTARRAY)
+	- data type (choose between : INT, DOUBLE, DOUBLEARRAY, DOUBLELIST, STRING, DATE, INTARRAY)
 	- length (array size or "-" if not a collection)
 	- minimum value (if applicable)
 	- maximum value (if applicable)
@@ -59,7 +60,7 @@ Output a single JSON object. Do not include any extra text, explanations, or key
 - Provide for each output :
 	- name 
 	- description
-	- data type (INT, DOUBLE, DOUBLEARRAY, DOUBLELIST, CHAR, DATE, INTARRAY)
+	- data type (choose between : INT, DOUBLE, DOUBLEARRAY, DOUBLELIST, STRING, DATE, INTARRAY)
 	- category (always "state")
 	- length (array size or "-" if not a collection)
 	- minimum value (if applicable)

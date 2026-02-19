@@ -43,9 +43,9 @@ python code_to_Crop2ml.py -u growth.py -u stress.py -u weather.py -c composite.j
 ```
 Processes three model units and combines them into a composite model using the composite.json configuration.
 
-#### Simple Two-Unit Model
+#### Multiple Model Units separated in different files
 ```bash
-python code_to_Crop2ml.py -u surface_temperature.cs -u soil_layers_temeprature.cs -o ./models/soiltemperature
+python code_to_Crop2ml.py -u surface_temperature.cs surface_temperature_info.txt -u soil_layers_temeprature.cs soil_layers_temperature_structure.json -o ./output
 ```
 Generates a soil temperature model combining surface and soil layers temperature modules.
 

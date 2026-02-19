@@ -43,8 +43,17 @@ def language(extension):
 #-----------------------------------------------------------------
 # Function to check if all files exist and are correctly read
 #-----------------------------------------------------------------
-def check_files(*args, comp, config_files):
-  for file_path in args:
+def check_files(*args, comp, config_files, log_file, output_folder):
+  # Flatten incoming args (they may be individual file paths or lists/tuples of paths)
+  files_to_check = []
+  for a in args:
+    if isinstance(a, (list, tuple)):
+      files_to_check.extend(a)
+    else:
+      files_to_check.append(a)
+
+  # Validate each provided file path
+  for file_path in files_to_check:
     if not os.path.exists(file_path):
       raise FileNotFoundError(f"File {file_path} does not exist")
     try:
@@ -52,25 +61,27 @@ def check_files(*args, comp, config_files):
         f.read()
     except Exception as e:
       raise ValueError(f"Cannot read file {file_path}: {e}")
-    
-    if comp is None:
-      continue
-    else :
-      if not os.path.exists(comp):
-        raise FileNotFoundError(f"File {comp} does not exist")
-      try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-          f.read()
-      except Exception as e:
-        raise ValueError(f"Cannot read file {file_path}: {e}")
+
+  # Validate composite file if provided
+  if comp is not None:
+    if not os.path.exists(comp):
+      raise FileNotFoundError(f"File {comp} does not exist")
+    try:
+      with open(comp, 'r', encoding='utf-8') as f:
+        f.read()
+    except Exception as e:
+      raise ValueError(f"Cannot read file {comp}: {e}")
   
   for file_path in config_files:
     if not os.path.exists(file_path):
       raise FileNotFoundError(f"Configuration file {file_path} does not exist")
-    # Skip reading if it's a directory, only read if it's a file
-    if os.path.isfile(file_path):
-      try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-          f.read()
-      except Exception as e:
-        raise ValueError(f"Cannot read configuration file {file_path}: {e}")
+    try:
+      with open(file_path, 'r', encoding='utf-8') as f:
+        f.read()
+    except Exception as e:
+      raise ValueError(f"Cannot read configuration file {file_path}: {e}")
+    
+  # Create or clear log file
+  log_file_path = os.path.join(output_folder, log_file)
+  with open(log_file_path, 'w', encoding='utf-8') as f:
+    pass

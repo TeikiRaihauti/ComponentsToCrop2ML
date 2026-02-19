@@ -57,13 +57,13 @@ def send_to_gpt(instructions, prompt, api_key, model, reasoning_effort, text_for
 # Function to create metadata JSON file for a unit model 
 # This function generates metadata for a given code file and saves it as a JSON file.
 #-----------------------------------------------------------------
-def create_unit_metadata(api_key_path, agent_descmeta, model, output_path, main_file):
+def create_unit_metadata(api_key_path, agent_descmeta, model, output_path, main_file, helper_files):
   api_key = extract_api_key(api_key_path)
   extension = extract_extension(main_file)
   language_name = language(extension)
   instructions_metadata = extract_text(agent_descmeta)
 
-  prompt = prompt_unit(main_file, language_name)
+  prompt = prompt_unit(main_file, language_name, helper_files)
   response_metadata = send_to_gpt(instructions_metadata, prompt, api_key, model, "medium", "json_object", "low")
 
   os.makedirs(output_path, exist_ok=True)
@@ -124,13 +124,13 @@ def create_algo_metadata(api_key_path, agent_algometa, model, output_path, pytho
 # Function to create python code
 # This function generates a refactored python module for a given code file and saves it.
 #-----------------------------------------------------------------
-def create_python_code(api_key_path, agent_pyrefactor, model, output_path, main_file):
+def create_python_code(api_key_path, agent_pyrefactor, model, output_path, main_file, helper_files):
   api_key = extract_api_key(api_key_path)
   extension = extract_extension(main_file)
   language_name = language(extension)
   instructions_refactor = extract_text(agent_pyrefactor)
 
-  prompt = prompt_unit(main_file, language_name)
+  prompt = prompt_unit(main_file, language_name, helper_files)
   response_refactored = send_to_gpt(instructions_refactor, prompt, api_key, model, "high", "text", "low")
 
   os.makedirs(output_path, exist_ok=True)
