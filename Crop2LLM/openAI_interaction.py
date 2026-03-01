@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 import json
 from utilities import extract_text, extract_extension, language
-from prompt_creation import prompt_unit, prompt_composite, prompt_refactor, prompt_transpile
+from prompt_creation import prompt_unit, prompt_composite, prompt_refactor, prompt_transpile, prompt_debug_unit, prompt_debug_composite, prompt_consensus_JSON, prompt_consensus_python
 
 #-----------------------------------------------------------------
 # Function to connect to OpenAI's API
@@ -108,9 +108,27 @@ def create_algo_metadata(api_key_path, agent_algometa, model, output_path, pytho
 
   prompt = prompt_refactor(python_code)
   response = send_to_gpt(instructions_json, prompt, api_key, model, "high", "json_object", "low")
+  json_code = json.loads(response)
+
+  return json_code
+
+
+#-----------------------------------------------------------------
+# Function to create a consensus algorithm metadata JSON file from different candidates
+# This function generates a consensus algorithm metadata for a given code file and saves it as a JSON file.
+#-----------------------------------------------------------------
+def create_consensus_JSON(api_key_path, agent_algo_consensus, model, jsons, main_file, output_path):
+  api_key = extract_api_key(api_key_path)
+  extension = extract_extension(main_file)
+  language_name = language(extension)
+
+  instructions_algo_consensus = extract_text(agent_algo_consensus)
+
+  prompt = prompt_consensus_JSON(jsons, main_file, language_name)
+  response = send_to_gpt(instructions_algo_consensus, prompt, api_key, model, "high", "json_object", "low")
 
   os.makedirs(output_path, exist_ok=True)
-  base = Path(model_name).stem
+  base = Path(main_file).stem
   json_code_path = output_path + "/" + base + "_code.json"
   json_code = json.loads(response)
 
@@ -133,13 +151,30 @@ def create_python_code(api_key_path, agent_pyrefactor, model, output_path, main_
   prompt = prompt_unit(main_file, language_name, helper_files)
   response_refactored = send_to_gpt(instructions_refactor, prompt, api_key, model, "high", "text", "low")
 
+  return response_refactored
+
+
+#-----------------------------------------------------------------
+# Function to create a consensus python code from different candidates
+# This function generates a consensus python code for a given code file and saves it as a py file.
+#-----------------------------------------------------------------
+def create_consensus_python(api_key_path, agent_py_consensus, model, codes, main_file, helper_files, output_path):
+  api_key = extract_api_key(api_key_path)
+  extension = extract_extension(main_file)
+  language_name = language(extension)
+
+  instructions_py_consensus = extract_text(agent_py_consensus)
+
+  prompt = prompt_consensus_python(codes, main_file, language_name, helper_files)
+  response = send_to_gpt(instructions_py_consensus, prompt, api_key, model, "high", "text", "low")
+
   os.makedirs(output_path, exist_ok=True)
   base = Path(main_file).stem
   python_code_path = output_path + "/" + base + "_code.py"
 
   with open(python_code_path, "w", encoding="utf-8") as f:
-    f.write(response_refactored)
-  return response_refactored
+    f.write(response)
+  return response
 
 
 #-----------------------------------------------------------------
@@ -154,3 +189,31 @@ def create_cyml_code(api_key_path, agent_cymltranspile, model, python_module, al
   response_cyml = send_to_gpt(instructions_transpile, prompt_transpiled, api_key, model, "high", "text", "low")
 
   return response_cyml
+
+
+#-----------------------------------------------------------------
+# Function to debug CyML code for modelUnit
+# This function proposes corrections for a CyML module modelUnit.
+#-----------------------------------------------------------------
+def debug_cyml_code_unit(api_key_path, agent_debug, model, cyml_module, algo_meta, error_msg):
+  api_key = extract_api_key(api_key_path)
+  instructions_debug = extract_text(agent_debug)
+
+  prompt_debug = prompt_debug_unit(cyml_module, algo_meta, error_msg)
+  response = send_to_gpt(instructions_debug, prompt_debug, api_key, model, "high", "text", "medium")
+
+  return response
+
+
+#-----------------------------------------------------------------
+# Function to debug CyML code for ModelComposite
+# This function proposes corrections for a CyML module modelComposite.
+#-----------------------------------------------------------------
+def debug_cyml_code_composite(api_key_path, agent_debug, model, cyml_module, algo_metas, composite_meta, error_msg):
+  api_key = extract_api_key(api_key_path)
+  instructions_debug = extract_text(agent_debug)
+
+  prompt_debug = prompt_debug_composite(cyml_module, composite_meta, algo_metas, error_msg)
+  response = send_to_gpt(instructions_debug, prompt_debug, api_key, model, "high", "text", "medium")
+
+  return response

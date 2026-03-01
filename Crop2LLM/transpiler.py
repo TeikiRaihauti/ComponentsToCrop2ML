@@ -1,12 +1,10 @@
 import os
-from pathlib import Path
 import ast
 from openAI_interaction import create_cyml_code
 
 #-----------------------------------------------------------------
 # Function to dedent code by one level
 # This function removes one level of indentation from the given code string.
-# The first and last lines of the output are commented using #
 #-----------------------------------------------------------------
 def dedent_one_level(code):
   indent = "    "
@@ -30,6 +28,30 @@ def dedent_one_level(code):
 
 
 #-----------------------------------------------------------------
+# Function to replace function names in the transpiled code based on the algo metadata and description metadata
+# This function checks the function names in the transpiled code and replaces them with the appropriate names
+#-----------------------------------------------------------------
+def format(code, algo_meta, desc_meta):
+  if algo_meta.get('init', {}) != '-' and algo_meta.get('init', {}) != []:
+    init = algo_meta['init']
+    if init.get('name', '') != '-' :
+      code = code.replace(init['name'] + "(", "init_" + desc_meta.get('metadata', {}).get('Title') + "(")
+
+  for input in algo_meta.get('inputs', []):
+    if input.get('name', '') != '-' :
+      for line in code.splitlines():
+        if line.strip().startswith("cdef") and line.strip().endswith(input['name']):
+          code = code.replace(line + '\n', '').replace(line, '')
+
+  for output in algo_meta.get('outputs', []):
+    if output.get('name', '') != '-' :
+      for line in code.splitlines():
+        if line.strip().startswith("cdef") and line.strip().endswith(output['name']):
+          code = code.replace(line + '\n', '').replace(line, '')
+  return code
+
+
+#-----------------------------------------------------------------
 # Function to extract functions from a Python code string and transpile each to a separate file
 # This function parses the Python code string, detects each function definition, and transpiles them in a new file containing only that function.
 #-----------------------------------------------------------------
@@ -42,8 +64,9 @@ def transpile_functions(python_code, algo_meta, desc_meta, api_key_path, model, 
   
   functions_transpiled = []
   functions = []
-  functions.append(algo_meta.get('init', {}).get('name'))
   functions.append(algo_meta.get('process', {}).get('name'))
+  if algo_meta.get('init', {}) != '-' and algo_meta.get('init', {}) != []:
+    functions.append(algo_meta.get('init', {}).get('name'))
   if algo_meta.get('functions', {}) != '-' and algo_meta.get('functions', {}) != []:
     for func in algo_meta.get('functions', {}):
       functions.append(func.get('name'))
@@ -59,7 +82,7 @@ def transpile_functions(python_code, algo_meta, desc_meta, api_key_path, model, 
         function_code = '\n'.join(lines[start_line:end_line])
         cyml = create_cyml_code(api_key_path, agent_cymltranspile, model, function_code, algo_meta)
         
-        if function_name == algo_meta.get('init', {}).get('name') :
+        if algo_meta.get('init', {}) != '-' and algo_meta.get('init', {}) != [] and function_name == algo_meta.get('init', {}).get('name') :
           file_name = f"init_{desc_meta.get('metadata', {}).get('Title')}"
           cyml = dedent_one_level(cyml)
         elif function_name == algo_meta.get('process', {}).get('name'):
@@ -68,7 +91,8 @@ def transpile_functions(python_code, algo_meta, desc_meta, api_key_path, model, 
         else:
           file_name = function_name
 
-        if cyml and cyml.strip():
+        if cyml and cyml.strip() and any(line.strip() and not line.strip().startswith('#') for line in cyml.split('\n')):
+          cyml = format(cyml, algo_meta, desc_meta)
           file_path = os.path.join(output_folder, f"{file_name}.pyx")
           functions_transpiled.append(file_path)
           with open(file_path, 'w', encoding='utf-8') as f:

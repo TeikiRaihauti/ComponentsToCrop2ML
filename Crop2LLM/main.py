@@ -1,111 +1,125 @@
-import os
-from pathlib import Path
-from cookiecutter.main import cookiecutter
 import argparse
-import shutil
 from utilities import check_files
-from openAI_interaction import create_python_code, create_unit_metadata, create_algo_metadata, create_composite_metadata
-from json2XML import json_to_XML_composite, json_to_XML_unit
-from transpiler import transpile_functions
+from generation import process_unit, process_composite, create_crop2ml_package
+from verification import check_code_generated, debug_code, generate_component_all_languages
+import concurrent.futures
 
 #-----------------------------------------------------------------
-#CONFIGURATION
+# CONFIGURATION
 #-----------------------------------------------------------------
 API_KEY_PATH = "./config/api_key.txt"
 BIG_MODEL = "gpt-5.2"
 SMALL_MODEL = "gpt-5-mini"
 COOKIE_CUTTER_TEMPLATE = "./config/cookiecutter-crop2ml/"
-LOG_FILE = "Crop2LLM_log.txt"
-LANGUAGES = ['cs','cpp','py','f90','java','simplace','sirius', 'openalea','apsim','dssat','stics','bioma']
+LOG_FILE = "Crop2LLM_report.txt"
+REPORT_FILE = "Transformation_report.txt"
+# simplace to add
+LANGUAGES = ['r', 'cs', 'cpp', 'py', 'f90', 'openalea', 'apsim', 'dssat', 'stics', 'bioma', 'sirius', 'java']
+NUMBER_CANDIDATES = 3
+MAX_PARALLEL_UNITS = 5
+NUMBER_ITERATIONS = 1
 
 UNIT_META = "./config/Agents/Agent-UnitMeta.txt"
 COMPOSITE_META = "./config/Agents/Agent-CompositeMeta.txt"
 PY_REFACTOR = "./config/Agents/Agent-PyRefactor.txt"
 CYML_TRANSPILE = "./config/Agents/Agent-CyMLTranspile.txt"
 ALGO_META = "./config/Agents/Agent-AlgoMeta.txt"
+ALGO_CONSENSUS = "./config/Agents/Agent-AlgoConsensus.txt"
+PY_CONSENSUS = "./config/Agents/Agent-PyConsensus.txt"
+DEBUG_CYML = "./config/Agents/Agent-Debug.txt"
 CONFIG_FILES = [
     UNIT_META,
     COMPOSITE_META,
     PY_REFACTOR,
     CYML_TRANSPILE,
     ALGO_META,
+    ALGO_CONSENSUS,
+    PY_CONSENSUS,
+    DEBUG_CYML,
     API_KEY_PATH
 ]
 
 #-----------------------------------------------------------------
 # Simulation section
+# Generate a complete Crop2ML component from model units and composite in the output folder defined
 #-----------------------------------------------------------------
 if __name__ == "__main__":
-  # Read arguments from command line
-  parser = argparse.ArgumentParser(description="Process crop model units and composite.")
-  parser.add_argument('-u', '--unit', action='append', nargs='+', required=True, help='Model unit files (can be specified multiple times)')
+  parser = argparse.ArgumentParser(description="Transform crop model components into Crop2ML component and vice-versa.")
+  parser.add_argument('-u', '--unit', action='append', nargs='+', required=False, help='Model unit files (can be specified multiple times)')
   parser.add_argument('-c', '--composite', required=False, help='Model composite file')
-  parser.add_argument('-o', '--output', required=True, help='Output folder')
+  parser.add_argument('-o', '--output', required=False, help='Output folder')
+  parser.add_argument('-p', '--package', required=False, help='Model package directory')
   args = parser.parse_args()
 
-  # Flatten model_units list (action='append' with nargs='+' creates nested list)
-  model_units = args.unit
-  model_composite = args.composite
-  output_folder = args.output
-  desc_metas = []
-  algo_metas = []
-  XML_units = []
-  codes = []
-  functions_transpiled = []
-  check_files(*model_units, comp=model_composite, config_files=CONFIG_FILES, log_file=LOG_FILE, output_folder=output_folder)
+  if args.unit is not None :
+    if args.package is not None :
+      parser.error("You must choose between --unit and --package, not both.")
 
-  # Process each model unit
-  for group_id, group in enumerate(model_units):
-    main_file = group[0]
-    helper_files = group[1:]
-    model_unit_name = Path(main_file).stem
+    elif args.output is None:
+      parser.error("Output folder must be specified when using --unit.")
 
-    print(f"Processing descriptive metadata of the model unit {group_id+1} : {model_unit_name}...")
-    metadata = create_unit_metadata(API_KEY_PATH, UNIT_META, SMALL_MODEL, output_folder, main_file, helper_files)
-    desc_metas.append(metadata)
-
-    print(f"Refactoring the model...")
-    code = create_python_code(API_KEY_PATH, PY_REFACTOR, BIG_MODEL, output_folder, main_file, helper_files)
-    codes.append(code)
-
-    print(f"Processing algorithmic metadata...")
-    algo = create_algo_metadata(API_KEY_PATH, ALGO_META, BIG_MODEL, output_folder, code, main_file)
-    algo_metas.append(algo)
-
-    print("Transpiling each function into CyML...")
-    functions_transpiled.append(transpile_functions(code, algo, metadata, API_KEY_PATH, BIG_MODEL, CYML_TRANSPILE, output_folder))
-
-    print("Generating the XML file...")
-    if model_composite is None :
-      XML_units.append(json_to_XML_unit(main_file, output_folder, metadata, algo, LOG_FILE))
+    #-----------------------------------------------------------------
+    # SECTION : From crop model component to Crop2ML 
     else :
-      XML_units.append(json_to_XML_unit(model_composite, output_folder, metadata, algo, LOG_FILE))  
+      model_units = args.unit
+      model_composite = args.composite
+      output_folder = args.output
+      XML_units = []
+      codes = []
+      functions_transpiled = []
 
-  # Process model composite
-  print(f"Generating the composite model...")
-  composite_metadata = create_composite_metadata(API_KEY_PATH, COMPOSITE_META, SMALL_MODEL, output_folder, XML_units, model_composite)
-  if model_composite is None :
-    model_composite = model_units[0][0]
-  xml_composite = json_to_XML_composite(model_composite, output_folder, composite_metadata, XML_units)
+      check_files(*model_units, comp=model_composite, config_files=CONFIG_FILES, log_file=LOG_FILE, output_folder=output_folder)
 
-  # Create cookiecutter project
-  print(f"Generating Crop2ML project for the model component")
-  metadata = composite_metadata['metadata']
-  cookiecutter(COOKIE_CUTTER_TEMPLATE, 
-    no_input=True,
-    overwrite_if_exists=True,
-    extra_context={'project_name':Path(model_composite).stem, 
-                  'repo_name':Path(model_composite).stem,
-                  'author_name': metadata['Authors'],
-                  'description': metadata['Extended description'], 
-                  'open_source_license':"MIT"},
-    output_dir=output_folder)
-  
-  # Move generated files to the cookiecutter project directory
-  for xml_file in XML_units:
-    shutil.copy(xml_file, f"{output_folder}/{Path(model_composite).stem}/crop2ml/")
-  shutil.copy(xml_composite, f"{output_folder}/{Path(model_composite).stem}/crop2ml/")
+      # Process each model unit concurrently
+      print("Generating modelunits...")
+      with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_PARALLEL_UNITS) as executor:
+        futures = [
+          executor.submit(process_unit, API_KEY_PATH, UNIT_META, PY_REFACTOR, ALGO_META, CYML_TRANSPILE, ALGO_CONSENSUS, PY_CONSENSUS,
+                          SMALL_MODEL, BIG_MODEL, NUMBER_CANDIDATES, LOG_FILE, grp, model_composite, output_folder)
+          for idx, grp in enumerate(model_units)
+        ]
+        for fut in concurrent.futures.as_completed(futures):
+          xml, functions = fut.result()
+          XML_units.append(xml)
+          functions_transpiled.append(functions)
 
-  for function_transpiled in functions_transpiled:
-    for function in function_transpiled:
-      shutil.copy(function, f"{output_folder}/{Path(model_composite).stem}/crop2ml/algo/pyx/")
+      # Process model composite
+      print(f"Generating the composite model...")
+      composite_metadata, xml_composite, model_composite = process_composite(API_KEY_PATH, COMPOSITE_META, SMALL_MODEL, output_folder, XML_units, model_composite, LOG_FILE, model_units[0][0])
+
+      # Create cookiecutter project
+      print(f"Generating Crop2ML project for the model component...")
+      project_dir = create_crop2ml_package(COOKIE_CUTTER_TEMPLATE, output_folder, model_composite, composite_metadata, XML_units, xml_composite, functions_transpiled, LOG_FILE)
+
+      print(f"Crop2ML package generated successfully in {project_dir} !")
+      print(f"Check {LOG_FILE} for more details during the automatic transformation !")
+
+
+  #-----------------------------------------------------------------
+  # SECTION : From Crop2ML to crop model component
+  elif args.package is not None:
+    package = args.package
+    verif_result = False
+    iteration = 0
+    check_files([], comp=None, config_files=CONFIG_FILES, log_file=REPORT_FILE, output_folder=package)
+
+    while not verif_result and iteration < NUMBER_ITERATIONS:
+      print("Checking if code generated is correct...")
+      try:
+        verif_result = check_code_generated(package, REPORT_FILE)
+      except Exception as e:
+        print("Error during code verification, trying to fix it...")
+        debug_code(API_KEY_PATH, DEBUG_CYML, BIG_MODEL, package, REPORT_FILE)
+
+      iteration += 1
+      
+    if not verif_result:
+      print("Code verification failed. Please check the report for details.")
+    else:
+      print("All files parsed and AST generated successfully.")
+      print("Generating the component in all languages...")
+      generate_component_all_languages(package, LANGUAGES)
+      print("Component generated successfully in all languages/platforms supported !")
+
+  else:
+    parser.error("At least one of --unit or --package must be provided.")

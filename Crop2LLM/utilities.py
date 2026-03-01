@@ -37,6 +37,8 @@ def language(extension):
     return "Fortran90"
   elif extension == ".pyx":
     return "Cython"
+  elif extension == ".vba":
+    return "Visual Basic"
   else:
     return "Unknown"
 
@@ -84,4 +86,22 @@ def check_files(*args, comp, config_files, log_file, output_folder):
   # Create or clear log file
   log_file_path = os.path.join(output_folder, log_file)
   with open(log_file_path, 'w', encoding='utf-8') as f:
+    f.write("")
     pass
+
+
+#-----------------------------------------------------------------
+# Function to log comments from the JSON metadata into a log file
+#-----------------------------------------------------------------
+def log_comments(json, output_path, log_file, model_name):
+  comments = json.get('comments', [])
+  log_path = os.path.join(output_path, log_file)
+  with open(log_path, 'a', encoding='utf-8') as lf:
+    lf.write(f"--- {model_name} ---\n")
+    for c in comments:
+      if isinstance(c, dict):
+        comment_text = c.get('comment', str(c))
+        lf.write(comment_text + "\n")
+      else:
+        lf.write(str(c) + "\n")
+    lf.write("\n")

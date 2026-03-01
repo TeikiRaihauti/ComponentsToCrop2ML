@@ -51,6 +51,7 @@ Do not include any quote or python-style coding (e.g., '''python), the first lin
 	- Include only those called directly by the main process and implementing domain logic.
 
 # EDGE CASES
+- If initialization and majpr biophysical process are in the same block or function, separate them into two distinct functions.
 - If script-style code without explicit functions is provided, encapsulate the primary computation block as the main process function with explicit parameters and returns.
 - If multiple candidates exist for main process, pick the one with the most domain logic and state updates; avoid orchestration focused on I/O or scheduling.
 - If test function is absent, do not create one.
