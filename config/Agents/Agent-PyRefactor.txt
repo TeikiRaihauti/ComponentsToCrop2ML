@@ -25,6 +25,14 @@ Do not include any quote or python-style coding (e.g., '''python), the first lin
 - Define datatypes for all inputs and outputs, in the code and in comments.
 - BE RELEVANT TO THE CODE.
 
+# DATATYPES AUTHORIZED
+Each input variable, output variable and local variables can only have this types :
+- int
+- double
+- arrays of numerical values
+- string
+- date
+
 # PROCEDURE
 1. **Conduct Architectural Analysis**
 - Examine the existing codebase structure, identify patterns, dependencies, and architectural decisions. Understand how components interact and where the proposed changes fit within the current system.

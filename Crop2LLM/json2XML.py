@@ -145,6 +145,13 @@ def add_outputs(xml_outputs, json_outputs):
     attrs['unit'] = str(output.get('unit', ''))
     attrs['uri'] = str(output.get('uri', ''))
 
+    if str(output.get('default')) == "-" or str(output.get('default')) == "None":
+      attrs['default'] = ""
+    if str(output.get('max')) == "-" or str(output.get('max')) == "None":
+      attrs['max'] = ""
+    if str(output.get('min')) == "-" or str(output.get('min')) == "None":
+      attrs['min'] = ""
+
     # Validate that default, max, min are numerical when datatype is numerical
     numerical_types = ['DOUBLE', 'DOUBLELIST', 'DOUBLEARRAY', 'INTEGER', 'INTEGERLIST', 'INTEGERARRAY']
     is_numerical_datatype = any(numeric_type in str(output.get('datatype', '')).upper() for numeric_type in numerical_types)
@@ -172,6 +179,9 @@ def add_tests(root_XML, json_tests, json_inputs):
   if json_tests == [] or json_tests[0] == "-" or json_tests[0] == "" or json_tests[0].get('name') == "-":
     return
   
+  return
+
+  #TO-DO : add the tests detected in the XML
   parameter_inputs = []
   variable_inputs = []
   inputtype_by_name = {inp['name']: inp.get('inputtype', '') for inp in json_inputs}

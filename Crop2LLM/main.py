@@ -1,7 +1,8 @@
 import argparse
+import os
 from utilities import check_files
 from generation import process_unit, process_composite, create_crop2ml_package
-from verification import check_code_generated, debug_code, generate_component_all_languages
+from verification import check_code_composite, debug_code, debug_xml, generate_component_all_languages, generate_pyx_composite, generate_pyx_unit, check_code_unit
 import concurrent.futures
 
 #-----------------------------------------------------------------
@@ -13,30 +14,38 @@ SMALL_MODEL = "gpt-5-mini"
 COOKIE_CUTTER_TEMPLATE = "./config/cookiecutter-crop2ml/"
 LOG_FILE = "Crop2LLM_report.txt"
 REPORT_FILE = "Transformation_report.txt"
-# simplace to add
-LANGUAGES = ['r', 'cs', 'cpp', 'py', 'f90', 'openalea', 'apsim', 'dssat', 'stics', 'bioma', 'sirius', 'java']
-NUMBER_CANDIDATES = 3
+# simplace/cpp to add
+LANGUAGES = ['r', 'cs', 'py', 'f90', 'openalea', 'apsim', 'dssat', 'stics', 'bioma', 'sirius', 'java']
+NUMBER_CANDIDATES = 5
 MAX_PARALLEL_UNITS = 5
-NUMBER_ITERATIONS = 1
+NUMBER_ITERATIONS = 5
 
 UNIT_META = "./config/Agents/Agent-UnitMeta.txt"
 COMPOSITE_META = "./config/Agents/Agent-CompositeMeta.txt"
 PY_REFACTOR = "./config/Agents/Agent-PyRefactor.txt"
+PY_CONSENSUS = "./config/Agents/Agent-PyConsensus.txt"
 CYML_TRANSPILE = "./config/Agents/Agent-CyMLTranspile.txt"
 ALGO_META = "./config/Agents/Agent-AlgoMeta.txt"
 ALGO_CONSENSUS = "./config/Agents/Agent-AlgoConsensus.txt"
-PY_CONSENSUS = "./config/Agents/Agent-PyConsensus.txt"
-DEBUG_CYML = "./config/Agents/Agent-Debug.txt"
+DEBUG_CYML = "./config/Agents/Agent-DebugCode.txt"
+DEBUG_XML = "./config/Agents/Agent-DebugXML.txt"
+APPLY_CODE = "./config/Agents/Agent-ApplyCode.txt"
+APPLY_XML = "./config/Agents/Agent-ApplyXML.txt"
+CODE_OR_XML = "./config/Agents/Agent-CodeOrXML.txt"
 CONFIG_FILES = [
-    UNIT_META,
-    COMPOSITE_META,
-    PY_REFACTOR,
-    CYML_TRANSPILE,
-    ALGO_META,
-    ALGO_CONSENSUS,
-    PY_CONSENSUS,
-    DEBUG_CYML,
-    API_KEY_PATH
+  API_KEY_PATH,
+  UNIT_META,
+  COMPOSITE_META,
+  PY_REFACTOR,
+  PY_CONSENSUS,
+  CYML_TRANSPILE,
+  ALGO_META,
+  ALGO_CONSENSUS,
+  DEBUG_CYML,
+  DEBUG_XML,
+  APPLY_CODE,
+  APPLY_XML,
+  CODE_OR_XML
 ]
 
 #-----------------------------------------------------------------
@@ -94,26 +103,80 @@ if __name__ == "__main__":
       print(f"Crop2ML package generated successfully in {project_dir} !")
       print(f"Check {LOG_FILE} for more details during the automatic transformation !")
 
-
   #-----------------------------------------------------------------
   # SECTION : From Crop2ML to crop model component
   elif args.package is not None:
     package = args.package
     verif_result = False
+    code_generated = False
     iteration = 0
+    report_path = os.path.join(package, REPORT_FILE)
+
     check_files([], comp=None, config_files=CONFIG_FILES, log_file=REPORT_FILE, output_folder=package)
 
-    while not verif_result and iteration < NUMBER_ITERATIONS:
-      print("Checking if code generated is correct...")
+    print("Checking if code can be generated...")
+    while not code_generated and iteration < NUMBER_ITERATIONS:
+      iteration += 1
+      with open(report_path, 'a') as rf:
+        rf.write(f"GENERATING PYX CODE --- ATTEMPT {iteration} ---\n\n")
       try:
-        verif_result = check_code_generated(package, REPORT_FILE)
+        code_generated = generate_pyx_unit(package, report_path)
+      except Exception as e:
+        print("Error during code generation, trying to fix it...")
+        debug_xml(API_KEY_PATH, DEBUG_CYML, DEBUG_XML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, True)
+
+    if not code_generated:
+      debug_xml(API_KEY_PATH, DEBUG_CYML, DEBUG_XML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, False)
+      print("Code generation failed. Please check the report for details.")
+    
+    iteration = 0
+    print("Checking if code generated is correct...")
+    while not verif_result and iteration < NUMBER_ITERATIONS:
+      iteration += 1
+      with open(report_path, 'a') as rf:
+        rf.write(f"CHECKING CODE GENERATED --- ATTEMPT {iteration} ---\n\n")
+      try:
+        verif_result = check_code_unit(package, report_path)
       except Exception as e:
         print("Error during code verification, trying to fix it...")
-        debug_code(API_KEY_PATH, DEBUG_CYML, BIG_MODEL, package, REPORT_FILE)
-
-      iteration += 1
+        debug_code(API_KEY_PATH, DEBUG_CYML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, True)
       
     if not verif_result:
+      debug_code(API_KEY_PATH, DEBUG_CYML, DEBUG_XML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, False)
+      print("Code verification failed. Please check the report for details.")
+
+    iteration = 0
+    code_generated = False
+    print("Checking if composite code can be generated...")
+    while not code_generated and iteration < NUMBER_ITERATIONS:
+      iteration += 1
+      with open(report_path, 'a') as rf:
+        rf.write(f"GENERATING COMPOSITE CODE --- ATTEMPT {iteration} ---\n\n")
+      try:
+        code_generated = generate_pyx_composite(package, report_path)
+      except Exception as e:
+        print("Error during code composite generation, trying to fix it...")
+        debug_xml(API_KEY_PATH, DEBUG_CYML, DEBUG_XML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, True)
+      
+    if not code_generated:
+      debug_xml(API_KEY_PATH, DEBUG_CYML, DEBUG_XML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, False)
+      print("Code generation failed. Please check the report for details.")
+
+    iteration = 0
+    verif_result = False
+    print("Checking if composite code generated is correct...")
+    while not verif_result and iteration < NUMBER_ITERATIONS:
+      iteration += 1
+      with open(report_path, 'a') as rf:
+        rf.write(f"CHECKING CODE COMPOSITE GENERATED --- ATTEMPT {iteration} ---\n\n")
+      try:
+        verif_result = check_code_composite(package, report_path)
+      except Exception as e:
+        print("Error during code verification, trying to fix it...")
+        debug_code(API_KEY_PATH, DEBUG_CYML, DEBUG_XML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, True)
+      
+    if not verif_result:
+      debug_code(API_KEY_PATH, DEBUG_CYML, DEBUG_XML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, False)
       print("Code verification failed. Please check the report for details.")
     else:
       print("All files parsed and AST generated successfully.")

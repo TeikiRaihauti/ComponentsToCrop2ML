@@ -3,7 +3,8 @@ import os
 from pathlib import Path
 import json
 from utilities import extract_text, extract_extension, language
-from prompt_creation import prompt_unit, prompt_composite, prompt_refactor, prompt_transpile, prompt_debug_unit, prompt_debug_composite, prompt_consensus_JSON, prompt_consensus_python
+from prompt_creation import prompt_apply_code_unit, prompt_apply_xml, prompt_choose, prompt_debug_code_unit, prompt_debug_xml_composite, prompt_debug_xml_unit, prompt_unit
+from prompt_creation import prompt_composite, prompt_refactor, prompt_transpile, prompt_debug_composite, prompt_consensus_JSON, prompt_consensus_python
 
 #-----------------------------------------------------------------
 # Function to connect to OpenAI's API
@@ -195,12 +196,73 @@ def create_cyml_code(api_key_path, agent_cymltranspile, model, python_module, al
 # Function to debug CyML code for modelUnit
 # This function proposes corrections for a CyML module modelUnit.
 #-----------------------------------------------------------------
-def debug_cyml_code_unit(api_key_path, agent_debug, model, cyml_module, algo_meta, error_msg):
+def create_debug_code_unit(api_key_path, agent_debug_code, agent_choose, agent_apply_code, agent_apply_xml, 
+                    model, cyml_module, algo_meta, error_msg, apply_correction):
+  
+  api_key = extract_api_key(api_key_path)
+  instructions_debug = extract_text(agent_debug_code)
+
+  prompt_debug = prompt_debug_code_unit(cyml_module, algo_meta, error_msg)
+  response = send_to_gpt(instructions_debug, prompt_debug, api_key, model, "high", "text", "medium")
+  file_to_modify = ""
+  response_xml = ""
+  response_code = ""
+
+  if apply_correction:
+    instructions_choose = extract_text(agent_choose)
+    prompt_code_or_xml = prompt_choose(response)
+    response_choose = send_to_gpt(instructions_choose, prompt_code_or_xml, api_key, model, "medium", "json_object", "low")
+    json_response = json.loads(response_choose)
+
+    file_to_modify = json_response.get("modifs").get("type", "")
+
+    if file_to_modify == "XML" or file_to_modify == "BOTH":
+      instructions_apply = extract_text(agent_apply_xml)
+      prompt_apply = prompt_apply_xml(algo_meta, response)
+      response_xml = send_to_gpt(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")
+
+    if file_to_modify == "CODEBASE" or file_to_modify == "BOTH":
+      instructions_apply = extract_text(agent_apply_code)
+      prompt_apply = prompt_apply_code_unit(cyml_module, error_msg, response)
+      response_code = send_to_gpt(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")   
+
+  return response, response_xml, response_code, file_to_modify
+
+
+#-----------------------------------------------------------------
+# Function to debug XML documentation for modelUnit
+# This function proposes corrections for a XML documentation modelUnit.
+#-----------------------------------------------------------------
+def create_debug_xml_unit(api_key_path, agent_debug, agent_apply, model, algo_meta, error_msg, apply_correction):
   api_key = extract_api_key(api_key_path)
   instructions_debug = extract_text(agent_debug)
 
-  prompt_debug = prompt_debug_unit(cyml_module, algo_meta, error_msg)
+  prompt_debug = prompt_debug_xml_unit(algo_meta, error_msg)
   response = send_to_gpt(instructions_debug, prompt_debug, api_key, model, "high", "text", "medium")
+
+  if apply_correction:
+    instructions_apply = extract_text(agent_apply)
+    prompt_apply = prompt_apply_xml(algo_meta, response)
+    response = send_to_gpt(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")
+
+  return response
+
+
+#-----------------------------------------------------------------
+# Function to debug XML documentation for modelComposite
+# This function proposes corrections for a XML documentation modelComposite.
+#-----------------------------------------------------------------
+def create_debug_xml_composite(api_key_path, agent_debug, agent_apply, model, algo_meta, algo_metas, error_msg, apply_correction):
+  api_key = extract_api_key(api_key_path)
+  instructions_debug = extract_text(agent_debug)
+
+  prompt_debug = prompt_debug_xml_composite(algo_meta, algo_metas, error_msg)
+  response = send_to_gpt(instructions_debug, prompt_debug, api_key, model, "high", "text", "medium")
+
+  if apply_correction:
+    instructions_apply = extract_text(agent_apply)
+    prompt_apply = prompt_apply_xml(algo_meta, response)
+    response = send_to_gpt(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")
 
   return response
 
@@ -209,11 +271,37 @@ def debug_cyml_code_unit(api_key_path, agent_debug, model, cyml_module, algo_met
 # Function to debug CyML code for ModelComposite
 # This function proposes corrections for a CyML module modelComposite.
 #-----------------------------------------------------------------
-def debug_cyml_code_composite(api_key_path, agent_debug, model, cyml_module, algo_metas, composite_meta, error_msg):
+def create_debug_code_composite(api_key_path, agent_debug_code, agent_choose, agent_apply_code, agent_apply_xml, 
+                    model, cyml_module, composite_meta, algo_metas, error_msg, apply_correction):
   api_key = extract_api_key(api_key_path)
-  instructions_debug = extract_text(agent_debug)
+  instructions_debug = extract_text(agent_debug_code)
 
   prompt_debug = prompt_debug_composite(cyml_module, composite_meta, algo_metas, error_msg)
   response = send_to_gpt(instructions_debug, prompt_debug, api_key, model, "high", "text", "medium")
 
-  return response
+  file_to_modify = ""
+  response_xml = ""
+  response_code = ""
+
+  if apply_correction:
+    instructions_choose = extract_text(agent_choose)
+    prompt_code_or_xml = prompt_choose(response)
+    response_choose = send_to_gpt(instructions_choose, prompt_code_or_xml, api_key, model, "medium", "json_object", "low")
+    json_response = json.loads(response_choose)
+
+    file_to_modify = json_response.get("modifs").get("type", "")
+
+    if file_to_modify == "XML" or file_to_modify == "BOTH":
+      instructions_apply = extract_text(agent_apply_xml)
+      prompt_apply = prompt_apply_xml(composite_meta, response)
+      response_xml = send_to_gpt(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")
+      
+    if file_to_modify == "CODEBASE" or file_to_modify == "BOTH":
+      instructions_apply = extract_text(agent_apply_code)
+      prompt_apply = prompt_apply_code_unit(cyml_module, error_msg, response)
+      response_code = send_to_gpt(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")   
+
+  return response, response_xml, response_code, file_to_modify
+
+
+  

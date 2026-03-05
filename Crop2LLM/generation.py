@@ -6,7 +6,6 @@ from json2XML import json_to_XML_composite, json_to_XML_unit
 from transpiler import transpile_functions
 import concurrent.futures
 
-
 #-----------------------------------------------------------------
 # Function to transform a modelUnit in Crop2ML
 #-----------------------------------------------------------------

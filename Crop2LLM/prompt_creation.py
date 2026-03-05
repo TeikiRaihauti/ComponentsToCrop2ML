@@ -111,7 +111,7 @@ def prompt_composite(XML_files, composite):
 # Function to create a prompt adapted to Agent-Debug for modelUnit
 # This function constructs a prompt based on the XML files of each model units.
 #-----------------------------------------------------------------
-def prompt_debug_unit(cyml_module, algo_meta, error_msg):
+def prompt_debug_code_unit(cyml_module, algo_meta, error_msg):
   prompt = ""
   prompt += f"Analyze and debug the following codebase representing a crop model component and follow the system instructions.\n"
   prompt += f"The code is marked clearly with --- START CODE --- at the start and --- END CODE --- at the end.\n"
@@ -120,6 +120,86 @@ def prompt_debug_unit(cyml_module, algo_meta, error_msg):
   prompt += f"--- START CODE ---\n{extract_text(cyml_module)}\n--- END CODE ---\n\n"
   prompt += f"--- START XML ---\n{extract_text(algo_meta)}\n--- END XML ---\n\n"
   prompt += f"--- START ERROR ---\n{error_msg}\n--- END ERROR ---\n\n"
+
+  return prompt
+
+
+#-----------------------------------------------------------------
+# Function to create a prompt adapted to Agent-Debug for modelUnit
+# This function constructs a prompt based on the XML files of each model units.
+#-----------------------------------------------------------------
+def prompt_choose(proposed_correction):
+  prompt = ""
+  prompt += f"Follow the system instructions with the proposed correction.\n"
+  prompt += f"The proposed correction is marked clearly with --- START PROPOSED CORRECTION --- at the start and --- END PROPOSED CORRECTION --- at the end.\n"
+  prompt += f"--- START PROPOSED CORRECTION ---\n{proposed_correction}\n--- END PROPOSED CORRECTION ---\n\n"
+
+  return prompt
+
+
+#-----------------------------------------------------------------
+# Function to create a prompt adapted to Agent-Debug for modelUnit
+# This function constructs a prompt based on the XML files of each model units.
+#-----------------------------------------------------------------
+def prompt_apply_code_unit(cyml_module, error_msg, proposed_correction):
+  prompt = ""
+  prompt += f"Produce a corrected codebase using the proposed correction and follow the system instructions.\n"
+  prompt += f"The codebase is marked clearly with --- START CODE --- at the start and --- END CODE --- at the end.\n"
+  prompt += f"The error message is marked clearly with --- START ERROR --- at the start and --- END ERROR --- at the end.\n"
+  prompt += f"The proposed correction is marked clearly with --- START PROPOSED CORRECTION --- at the start and --- END PROPOSED CORRECTION --- at the end.\n"
+  prompt += f"--- START CODE ---\n{extract_text(cyml_module)}\n--- END CODE ---\n\n"
+  prompt += f"--- START ERROR ---\n{error_msg}\n--- END ERROR ---\n\n"
+  prompt += f"--- START PROPOSED CORRECTION ---\n{proposed_correction}\n--- END PROPOSED CORRECTION ---\n\n"
+
+  return prompt
+
+#-----------------------------------------------------------------
+# Function to create a prompt adapted to Agent-Debug for modelUnit
+# This function constructs a prompt based on the XML files of each model units.
+#-----------------------------------------------------------------
+def prompt_debug_xml_unit(algo_meta, error_msg):
+  prompt = ""
+  prompt += f"Analyze and debug the following XML documentation of a crop model component and follow the system instructions.\n"
+  prompt += f"The XML documentation is marked clearly with --- START XML --- at the start and --- END XML --- at the end.\n"
+  prompt += f"The error message associated is marked clearly with --- START ERROR --- at the start and --- END ERROR --- at the end.\n"
+  prompt += f"--- START XML ---\n{extract_text(algo_meta)}\n--- END XML ---\n\n"
+  prompt += f"--- START ERROR ---\n{error_msg}\n--- END ERROR ---\n\n"
+
+  return prompt
+
+
+#-----------------------------------------------------------------
+# Function to create a prompt adapted to Agent-Debug for modelUnit
+# This function constructs a prompt based on the XML files of each model units.
+#-----------------------------------------------------------------
+def prompt_debug_xml_composite(algo_meta, algo_metas, error_msg):
+  prompt = ""
+  prompt += f"Analyze and debug the following XML documentation of a composition of different crop model components and follow the system instructions.\n"
+  prompt += f"The XML documentation is marked clearly with --- START XML --- at the start and --- END XML --- at the end.\n"
+  prompt += f"The error message associated is marked clearly with --- START ERROR --- at the start and --- END ERROR --- at the end.\n"
+  prompt += f"The XML documentation of the other units are marked clearly with --- START XML UNIT : XXX --- at the start and --- END XML UNIT : XXX--- at the end.\n"
+
+  prompt += f"--- START XML ---\n{extract_text(algo_meta)}\n--- END XML ---\n\n"
+  prompt += f"--- START ERROR ---\n{error_msg}\n--- END ERROR ---\n\n"
+
+  for algo_meta in algo_metas:
+    base = os.path.basename(algo_meta)
+    prompt += f"--- START XML UNIT : {base} ---\n{extract_text(algo_meta)}\n--- END XML UNIT : {base} ---\n\n"
+
+  return prompt
+
+
+#-----------------------------------------------------------------
+# Function to create a prompt adapted to Agent-Debug for modelUnit
+# This function constructs a prompt based on the XML files of each model units.
+#-----------------------------------------------------------------
+def prompt_apply_xml(algo_meta, proposed_correction):
+  prompt = ""
+  prompt += f"Produce a corrected XML documentation using the proposed correction and follow the system instructions.\n"
+  prompt += f"The XML documentation is marked clearly with --- START XML --- at the start and --- END XML --- at the end.\n"
+  prompt += f"The proposed correction is marked clearly with --- START PROPOSED CORRECTION --- at the start and --- END PROPOSED CORRECTION --- at the end.\n"
+  prompt += f"--- START XML ---\n{extract_text(algo_meta)}\n--- END XML ---\n\n"
+  prompt += f"--- START PROPOSED CORRECTION ---\n{proposed_correction}\n--- END PROPOSED CORRECTION ---\n\n"
 
   return prompt
 

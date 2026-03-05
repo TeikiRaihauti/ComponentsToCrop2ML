@@ -3,12 +3,12 @@
 - Produce one merged, canonical Python interface module for this component. This is a merge, not a concatenation: deduplicate, normalize, and resolve conflicts using the rules below and use the source code as the primary source of truth.
 
 # OUTPUT FORMAT
-- Output only the Python module source code. Do not include text outside the code. The module must define, if present in the original codebase:- The file must contain, in this order:
+- Output only the Python module source code. Do not include text outside the code. The module must define, if present in the original codebase, in this order:
 	- A self-contained initialization function (only if it exists in the original), with all required inputs as explicit parameters and explicit returns.
 	- A self-contained main biophysical process function, with all required inputs as explicit parameters and explicit returns of updated biophysical state variables.
 	- Any additional supporting functions called directly by the main process that implement domain logic.
-	- A test section (if test cases are present across inputs) guarded by a clear marker (e.g., if name == "main": or a test_ prefixed functions for pytest).
-Do not include any quote or python-style coding (e.g., '''python), the first line must be the python code.
+- Do not include any quote or python-style coding (e.g., '''python), the first line must be the python code.
+- The produced module must be importable (no print-only examples or unreachable code at top level).
 
 # GENERAL MERGING PRINCIPLES
 1. Source-of-truth and precedence
@@ -27,16 +27,20 @@ Do not include any quote or python-style coding (e.g., '''python), the first lin
 - Deduplicate parameters by name; merge annotations and defaults following precedence rules above.
 - If parameters are positional-only in the source, keep them positional-only; otherwise prefer explicit keyword names in signature for clarity.
 
-4. Tests
-- If test cases appear in input interfaces or the source, include test functions at the bottom. Use small, deterministic inputs derived from inputs; prefer code-provided examples. If contradictory expected outputs appear, prefer the source-coded behavior or majority consensus.
-- Tests should import the generated interface symbols from the module namespace (i.e., self-contained within the file).
-
-5. Comments and assumptions
+4. Comments and assumptions
 - Include a module-level COMMENTS listing any ambiguities.
 
-# SPECIAL RULES FOR AUTOMATED USE
-- The produced module must be importable (no print-only examples or unreachable code at top level).
-- Minimize external dependencies. Do not import heavy libraries; when numpy or pandas are used in the source, reflect that in the imports.
+# GENERAL RULES
+- Read all provided files fully before extracting anything.
+- Do not use classes, dataclasses, namedtuples, custom structures, object or self.
+- Do not define module-level variables, constants, or executable top-level code. Every part of the code must be inside a function body or a function signature.
+- Every parameters accessed outside the function body has to be defined as input parameters with a default value (if any).
+- Every function must be pure and self-contained: all external data previously accessed via globals, object attributes, files or environment variables must become explicit function parameters.
+- Treat a variable as an input only if the algorithm explicitly reads it to compute a result. Treat a variable as an output only if the algorithm explicitly produces or updates it through computation.
+- Do not infer inputs/outputs from interface elements (UI fields, request/response schemas, placeholders, metadata, formatting) unless they are explicitly processed in the algorithmic steps.
+- There must be only one initialization function and only one main biophysical process function across the entire module. Do not define or reference additional init/process functions in any other file.
+- Define datatypes for all inputs and outputs, in the code and in comments.
+- BE RELEVANT TO THE CODE.
 
 # IMPORTANT FINAL INSTRUCTIONS
 - Produce only the Python module content described above, and nothing else.
