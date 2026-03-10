@@ -145,8 +145,6 @@ def add_outputs(xml_outputs, json_outputs):
     attrs['unit'] = str(output.get('unit', ''))
     attrs['uri'] = str(output.get('uri', ''))
 
-    if str(output.get('default')) == "-" or str(output.get('default')) == "None":
-      attrs['default'] = ""
     if str(output.get('max')) == "-" or str(output.get('max')) == "None":
       attrs['max'] = ""
     if str(output.get('min')) == "-" or str(output.get('min')) == "None":
@@ -157,7 +155,7 @@ def add_outputs(xml_outputs, json_outputs):
     is_numerical_datatype = any(numeric_type in str(output.get('datatype', '')).upper() for numeric_type in numerical_types)
     
     if is_numerical_datatype:
-      for attr_key in ['default', 'max', 'min', "len"]:
+      for attr_key in ['max', 'min', "len"]:
         attr_value = attrs.get(attr_key, '')
         if attr_value and attr_value != '':
           try:
@@ -342,3 +340,57 @@ def json_to_XML_composite(model_composite, output_path, json_metadata, XML_units
   log_comments(json_metadata, output_path, log_file, "Composite model")
 
   return xml_path
+
+
+#-----------------------------------------------------------------
+# Function to format a Crop2ML XML file
+#-----------------------------------------------------------------
+def format_xml(xml_data):
+  root = ET.fromstring(xml_data)
+  
+  for input_elem in root.findall('.//Input'):
+    attrs = input_elem.attrib
+    
+    if str(attrs.get('default', '')) == "-" or str(attrs.get('default', '')) == "None":
+      attrs['default'] = ""
+    if str(attrs.get('max', '')) == "-" or str(attrs.get('max', '')) == "None":
+      attrs['max'] = ""
+    if str(attrs.get('min', '')) == "-" or str(attrs.get('min', '')) == "None":
+      attrs['min'] = ""
+
+    # Validate that default, max, min are numerical when datatype is numerical
+    numerical_types = ['DOUBLE', 'DOUBLELIST', 'DOUBLEARRAY', 'INTEGER', 'INTEGERLIST', 'INTEGERARRAY']
+    is_numerical_datatype = any(numeric_type in str(attrs.get('datatype', '')).upper() for numeric_type in numerical_types)
+    
+    if is_numerical_datatype:
+      for attr_key in ['default', 'max', 'min', "len"]:
+        attr_value = attrs.get(attr_key, '')
+        if attr_value and attr_value != '':
+          try:
+            float(attr_value)
+          except ValueError:
+            attrs[attr_key] = ""
+
+  for output_elem in root.findall('.//Output'):
+    attrs = output_elem.attrib
+    
+    if str(attrs.get('max', '')) == "-" or str(attrs.get('max', '')) == "None":
+      attrs['max'] = ""
+    if str(attrs.get('min', '')) == "-" or str(attrs.get('min', '')) == "None":
+      attrs['min'] = ""
+
+    # Validate that default, max, min are numerical when datatype is numerical
+    numerical_types = ['DOUBLE', 'DOUBLELIST', 'DOUBLEARRAY', 'INTEGER', 'INTEGERLIST', 'INTEGERARRAY']
+    is_numerical_datatype = any(numeric_type in str(attrs.get('datatype', '')).upper() for numeric_type in numerical_types)
+    
+    if is_numerical_datatype:
+      for attr_key in ['max', 'min', "len"]:
+        attr_value = attrs.get(attr_key, '')
+        if attr_value and attr_value != '':
+          try:
+            float(attr_value)
+          except ValueError:
+            attrs[attr_key] = ""
+  
+  # Return the formatted XML as string
+  return ET.tostring(root, encoding='utf-8')

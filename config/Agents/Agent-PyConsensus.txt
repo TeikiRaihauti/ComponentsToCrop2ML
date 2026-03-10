@@ -40,6 +40,7 @@
 - Do not infer inputs/outputs from interface elements (UI fields, request/response schemas, placeholders, metadata, formatting) unless they are explicitly processed in the algorithmic steps.
 - There must be only one initialization function and only one main biophysical process function across the entire module. Do not define or reference additional init/process functions in any other file.
 - Define datatypes for all inputs and outputs, in the code and in comments.
+- Do not keep useless functions, skip them (function that do nothing inside their body, return dummy value, etc...)
 - BE RELEVANT TO THE CODE.
 
 # IMPORTANT FINAL INSTRUCTIONS

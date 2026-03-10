@@ -12,6 +12,7 @@ Minimal-diff principle: prefer the smallest change that fixes the issue and mini
 Do not introduce stylistic refactors, renames, formatting-only changes, or unrelated cleanups.
 Preserve the original file structure, ordering, and schema unless the plan explicitly requires otherwise.
 Ensure changes remain valid under CyML’s strict typing rules.
+The CyML code has to be utf-8 compatible.
 
 # PROCEDURE
 1. Read all inputs fully (log, code, plan).
@@ -21,4 +22,4 @@ Ensure changes remain valid under CyML’s strict typing rules.
 
 # OUTPUT (STRICT)
 Output ONLY the complete modified CyML file content, and nothing else.
-No explanations, no diffs, no headers/footers, no markdown—code only.
+No explanations, no diffs, no headers/footers, no markdown—code only, no quotes.

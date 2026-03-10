@@ -1,24 +1,25 @@
 import argparse
 import os
+import sys
 from utilities import check_files
-from generation import process_unit, process_composite, create_crop2ml_package
-from verification import check_code_composite, debug_code, debug_xml, generate_component_all_languages, generate_pyx_composite, generate_pyx_unit, check_code_unit
+from generation import maj_component, process_unit, process_composite, create_crop2ml_package, generate_component
+from verification import check_code_composite, debug_code, debug_xml, generate_pyx_composite, generate_pyx_unit, check_code_unit
 import concurrent.futures
+import time
 
 #-----------------------------------------------------------------
 # CONFIGURATION
 #-----------------------------------------------------------------
 API_KEY_PATH = "./config/api_key.txt"
-BIG_MODEL = "gpt-5.2"
+BIG_MODEL = "gpt-5.3-codex"
 SMALL_MODEL = "gpt-5-mini"
 COOKIE_CUTTER_TEMPLATE = "./config/cookiecutter-crop2ml/"
 LOG_FILE = "Crop2LLM_report.txt"
 REPORT_FILE = "Transformation_report.txt"
-# simplace/cpp to add
-LANGUAGES = ['r', 'cs', 'py', 'f90', 'openalea', 'apsim', 'dssat', 'stics', 'bioma', 'sirius', 'java']
-NUMBER_CANDIDATES = 5
+LANGUAGES = ['r', 'cs', 'py', 'f90', 'apsim', 'dssat', 'stics', 'bioma', 'sirius', 'java', 'openalea', 'simplace','cpp']
+NUMBER_CANDIDATES = 3
 MAX_PARALLEL_UNITS = 5
-NUMBER_ITERATIONS = 5
+NUMBER_ITERATIONS = 20
 
 UNIT_META = "./config/Agents/Agent-UnitMeta.txt"
 COMPOSITE_META = "./config/Agents/Agent-CompositeMeta.txt"
@@ -26,7 +27,6 @@ PY_REFACTOR = "./config/Agents/Agent-PyRefactor.txt"
 PY_CONSENSUS = "./config/Agents/Agent-PyConsensus.txt"
 CYML_TRANSPILE = "./config/Agents/Agent-CyMLTranspile.txt"
 ALGO_META = "./config/Agents/Agent-AlgoMeta.txt"
-ALGO_CONSENSUS = "./config/Agents/Agent-AlgoConsensus.txt"
 DEBUG_CYML = "./config/Agents/Agent-DebugCode.txt"
 DEBUG_XML = "./config/Agents/Agent-DebugXML.txt"
 APPLY_CODE = "./config/Agents/Agent-ApplyCode.txt"
@@ -40,7 +40,6 @@ CONFIG_FILES = [
   PY_CONSENSUS,
   CYML_TRANSPILE,
   ALGO_META,
-  ALGO_CONSENSUS,
   DEBUG_CYML,
   DEBUG_XML,
   APPLY_CODE,
@@ -83,7 +82,7 @@ if __name__ == "__main__":
       print("Generating modelunits...")
       with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_PARALLEL_UNITS) as executor:
         futures = [
-          executor.submit(process_unit, API_KEY_PATH, UNIT_META, PY_REFACTOR, ALGO_META, CYML_TRANSPILE, ALGO_CONSENSUS, PY_CONSENSUS,
+          executor.submit(process_unit, API_KEY_PATH, UNIT_META, PY_REFACTOR, ALGO_META, CYML_TRANSPILE, PY_CONSENSUS,
                           SMALL_MODEL, BIG_MODEL, NUMBER_CANDIDATES, LOG_FILE, grp, model_composite, output_folder)
           for idx, grp in enumerate(model_units)
         ]
@@ -92,10 +91,17 @@ if __name__ == "__main__":
           XML_units.append(xml)
           functions_transpiled.append(functions)
 
+      # To delete
+      start = time.time()
+
       # Process model composite
       print(f"Generating the composite model...")
       composite_metadata, xml_composite, model_composite = process_composite(API_KEY_PATH, COMPOSITE_META, SMALL_MODEL, output_folder, XML_units, model_composite, LOG_FILE, model_units[0][0])
-
+      
+      # To delete
+      end = time.time()
+      print(f"Time elapsed for processing composite: {end - start} seconds")
+      
       # Create cookiecutter project
       print(f"Generating Crop2ML project for the model component...")
       project_dir = create_crop2ml_package(COOKIE_CUTTER_TEMPLATE, output_folder, model_composite, composite_metadata, XML_units, xml_composite, functions_transpiled, LOG_FILE)
@@ -114,7 +120,10 @@ if __name__ == "__main__":
 
     check_files([], comp=None, config_files=CONFIG_FILES, log_file=REPORT_FILE, output_folder=package)
 
-    print("Checking if code can be generated...")
+    # To delete
+    start = time.time()
+
+    print("Checking code generated...")
     while not code_generated and iteration < NUMBER_ITERATIONS:
       iteration += 1
       with open(report_path, 'a') as rf:
@@ -123,14 +132,14 @@ if __name__ == "__main__":
         code_generated = generate_pyx_unit(package, report_path)
       except Exception as e:
         print("Error during code generation, trying to fix it...")
-        debug_xml(API_KEY_PATH, DEBUG_CYML, DEBUG_XML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, True)
+      if not code_generated:
+        debug_xml(API_KEY_PATH, DEBUG_XML, APPLY_XML, BIG_MODEL, package, report_path, iteration < NUMBER_ITERATIONS)
 
     if not code_generated:
-      debug_xml(API_KEY_PATH, DEBUG_CYML, DEBUG_XML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, False)
       print("Code generation failed. Please check the report for details.")
+      sys.exit()
     
     iteration = 0
-    print("Checking if code generated is correct...")
     while not verif_result and iteration < NUMBER_ITERATIONS:
       iteration += 1
       with open(report_path, 'a') as rf:
@@ -139,15 +148,15 @@ if __name__ == "__main__":
         verif_result = check_code_unit(package, report_path)
       except Exception as e:
         print("Error during code verification, trying to fix it...")
-        debug_code(API_KEY_PATH, DEBUG_CYML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, True)
+      if not verif_result:
+        debug_code(API_KEY_PATH, DEBUG_CYML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, iteration < NUMBER_ITERATIONS)
       
     if not verif_result:
-      debug_code(API_KEY_PATH, DEBUG_CYML, DEBUG_XML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, False)
       print("Code verification failed. Please check the report for details.")
+      sys.exit()
 
     iteration = 0
     code_generated = False
-    print("Checking if composite code can be generated...")
     while not code_generated and iteration < NUMBER_ITERATIONS:
       iteration += 1
       with open(report_path, 'a') as rf:
@@ -156,15 +165,15 @@ if __name__ == "__main__":
         code_generated = generate_pyx_composite(package, report_path)
       except Exception as e:
         print("Error during code composite generation, trying to fix it...")
-        debug_xml(API_KEY_PATH, DEBUG_CYML, DEBUG_XML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, True)
+      if not code_generated:
+        debug_xml(API_KEY_PATH, DEBUG_CYML, DEBUG_XML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, iteration < NUMBER_ITERATIONS)
       
     if not code_generated:
-      debug_xml(API_KEY_PATH, DEBUG_CYML, DEBUG_XML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, False)
       print("Code generation failed. Please check the report for details.")
+      sys.exit()
 
     iteration = 0
     verif_result = False
-    print("Checking if composite code generated is correct...")
     while not verif_result and iteration < NUMBER_ITERATIONS:
       iteration += 1
       with open(report_path, 'a') as rf:
@@ -173,16 +182,37 @@ if __name__ == "__main__":
         verif_result = check_code_composite(package, report_path)
       except Exception as e:
         print("Error during code verification, trying to fix it...")
-        debug_code(API_KEY_PATH, DEBUG_CYML, DEBUG_XML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, True)
+      if not verif_result:
+        debug_code(API_KEY_PATH, DEBUG_CYML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, iteration < NUMBER_ITERATIONS)
       
     if not verif_result:
-      debug_code(API_KEY_PATH, DEBUG_CYML, DEBUG_XML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, False)
       print("Code verification failed. Please check the report for details.")
+      sys.exit()
+
     else:
       print("All files parsed and AST generated successfully.")
-      print("Generating the component in all languages...")
-      generate_component_all_languages(package, LANGUAGES)
-      print("Component generated successfully in all languages/platforms supported !")
+      pyx_folder = os.path.join(package, 'src', 'pyx')
+      crop2ml_folder = os.path.join(package, 'crop2ml')
+      maj_component(package, pyx_folder, crop2ml_folder)
+
+      for language in LANGUAGES:
+        print(f"Transpiling into {language}...")
+        try:
+          generate_component(package, language)
+          with open(report_path, 'a') as rf:
+            rf.write(f"Component generated successfully in {language}.\n")
+        except Exception as e:
+          with open(report_path, 'a') as rf:
+            rf.write(f"Error occurred while generating component for {language}: \n{e}\n")
+          continue
+    
+    # To delete
+      end = time.time()
+      print(f"Time elapsed for debugging: {end - start} seconds")
 
   else:
     parser.error("At least one of --unit or --package must be provided.")
+
+
+
+  #generate_component(package, "bioma")

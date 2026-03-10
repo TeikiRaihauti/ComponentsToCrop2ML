@@ -103,7 +103,7 @@ def create_composite_metadata(api_key_path, agent_compositemeta, model, output_p
 # Function to create algorithm metadata JSON file
 # This function generates a algorithm metadata for a given code file and saves it as a JSON file.
 #-----------------------------------------------------------------
-def create_algo_metadata(api_key_path, agent_algometa, model, output_path, python_code, model_name):
+def create_algo_metadata(api_key_path, agent_algometa, model, python_code):
   api_key = extract_api_key(api_key_path)
   instructions_json = extract_text(agent_algometa)
 
@@ -143,7 +143,7 @@ def create_consensus_JSON(api_key_path, agent_algo_consensus, model, jsons, main
 # Function to create python code
 # This function generates a refactored python module for a given code file and saves it.
 #-----------------------------------------------------------------
-def create_python_code(api_key_path, agent_pyrefactor, model, output_path, main_file, helper_files):
+def create_python_code(api_key_path, agent_pyrefactor, model, main_file, helper_files):
   api_key = extract_api_key(api_key_path)
   extension = extract_extension(main_file)
   language_name = language(extension)

@@ -14,7 +14,7 @@ Do not output explanations, summaries, warnings, or extra text—XML only.
 - Do not introduce new elements/attributes unless explicitly required by the plan or necessary to keep the XML valid per the existing schema pattern.
 - Do not “clean up”, reformat, rename, reorder, or normalize content unless explicitly instructed.
 - Do not change punctuation/casing/whitespace in unaffected nodes.
-- The final output must be well‑formed XML.
+- All text output must be UTF-8 encoded and fully XML-compatible.
 - If an instruction is ambiguous, follow the most conservative interpretation that matches the plan and existing XML patterns.
 - If information required to complete the plan is missing, do not invent values; instead, leave the XML unchanged except for clearly specified edits.
 

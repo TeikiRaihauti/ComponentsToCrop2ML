@@ -40,6 +40,8 @@ Output the fix proposition, by explaining clearly how and where to modify the co
 	- Untyped or generic containers.
 	- Exceptions (must be replaced by explicit checks).
 	- global keyword is prohibited, better pass variables by signature.
+	- casting is prohibited -> int(variable) / float(variable) /...
+
 
 3. Return statement
 	- Every function must contain a return statement.

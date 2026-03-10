@@ -12,6 +12,7 @@ Produce a single JSON object that follows the required structure.
 - All text output must be UTF-8 encoded and fully JSON-compatible.
 - The “Extended description” and “Short description” fields must be written in UTF-8 in a single line.
 - Double-check any populated field for consistency and traceability.
+- If only one model unit is provided, you can directly conclude that there's no linkage. 
 - Always respect the metadata precedence rules defined below.
 - Cycle prohibition: The final links list must not contain cycles (internal links can only connect two model units in one direction).
 
@@ -38,7 +39,7 @@ If no consensus can be established between XML files and web sources:
 	- Use the metadata from the first XML file provided, as an explicit fallback.
 	- Clearly apply this rule without attempting further inference.
 
-If metadata cannot be determined using the above rules, use "-".
+Always try as much as possible to fill all fields. If nothing is find, use "-" to fill the field.
 
 # PROCEDURE
 **Search Strategy:**
@@ -50,7 +51,6 @@ If metadata cannot be determined using the above rules, use "-".
 **Documentation and Analysis:**
 - Identify and populate the metadata fields listed below.
 - Include direct links to repositories, papers, and documentation
-- Apply the metadata precedence rules rigorously.
 
 **Identify linkage:**
 - Identify each variable declared in each XML file.
