@@ -3,7 +3,8 @@ import os
 from pathlib import Path
 import json
 from utilities import extract_text, extract_extension, language
-from prompt_creation import prompt_unit, prompt_composite, prompt_refactor, prompt_transpile
+from prompt_creation import prompt_apply_code_unit, prompt_apply_xml, prompt_choose, prompt_debug_code_unit, prompt_debug_xml_composite, prompt_debug_xml_unit, prompt_unit
+from prompt_creation import prompt_composite, prompt_refactor, prompt_transpile, prompt_debug_composite, prompt_consensus_JSON, prompt_consensus_python
 
 #-----------------------------------------------------------------
 # Function to connect to OpenAI's API
@@ -102,15 +103,33 @@ def create_composite_metadata(api_key_path, agent_compositemeta, model, output_p
 # Function to create algorithm metadata JSON file
 # This function generates a algorithm metadata for a given code file and saves it as a JSON file.
 #-----------------------------------------------------------------
-def create_algo_metadata(api_key_path, agent_algometa, model, output_path, python_code, model_name):
+def create_algo_metadata(api_key_path, agent_algometa, model, python_code):
   api_key = extract_api_key(api_key_path)
   instructions_json = extract_text(agent_algometa)
 
   prompt = prompt_refactor(python_code)
   response = send_to_gpt(instructions_json, prompt, api_key, model, "high", "json_object", "low")
+  json_code = json.loads(response)
+
+  return json_code
+
+
+#-----------------------------------------------------------------
+# Function to create a consensus algorithm metadata JSON file from different candidates
+# This function generates a consensus algorithm metadata for a given code file and saves it as a JSON file.
+#-----------------------------------------------------------------
+def create_consensus_JSON(api_key_path, agent_algo_consensus, model, jsons, main_file, output_path):
+  api_key = extract_api_key(api_key_path)
+  extension = extract_extension(main_file)
+  language_name = language(extension)
+
+  instructions_algo_consensus = extract_text(agent_algo_consensus)
+
+  prompt = prompt_consensus_JSON(jsons, main_file, language_name)
+  response = send_to_gpt(instructions_algo_consensus, prompt, api_key, model, "high", "json_object", "low")
 
   os.makedirs(output_path, exist_ok=True)
-  base = Path(model_name).stem
+  base = Path(main_file).stem
   json_code_path = output_path + "/" + base + "_code.json"
   json_code = json.loads(response)
 
@@ -124,7 +143,7 @@ def create_algo_metadata(api_key_path, agent_algometa, model, output_path, pytho
 # Function to create python code
 # This function generates a refactored python module for a given code file and saves it.
 #-----------------------------------------------------------------
-def create_python_code(api_key_path, agent_pyrefactor, model, output_path, main_file, helper_files):
+def create_python_code(api_key_path, agent_pyrefactor, model, main_file, helper_files):
   api_key = extract_api_key(api_key_path)
   extension = extract_extension(main_file)
   language_name = language(extension)
@@ -133,13 +152,30 @@ def create_python_code(api_key_path, agent_pyrefactor, model, output_path, main_
   prompt = prompt_unit(main_file, language_name, helper_files)
   response_refactored = send_to_gpt(instructions_refactor, prompt, api_key, model, "high", "text", "low")
 
+  return response_refactored
+
+
+#-----------------------------------------------------------------
+# Function to create a consensus python code from different candidates
+# This function generates a consensus python code for a given code file and saves it as a py file.
+#-----------------------------------------------------------------
+def create_consensus_python(api_key_path, agent_py_consensus, model, codes, main_file, helper_files, output_path):
+  api_key = extract_api_key(api_key_path)
+  extension = extract_extension(main_file)
+  language_name = language(extension)
+
+  instructions_py_consensus = extract_text(agent_py_consensus)
+
+  prompt = prompt_consensus_python(codes, main_file, language_name, helper_files)
+  response = send_to_gpt(instructions_py_consensus, prompt, api_key, model, "high", "text", "low")
+
   os.makedirs(output_path, exist_ok=True)
   base = Path(main_file).stem
   python_code_path = output_path + "/" + base + "_code.py"
 
   with open(python_code_path, "w", encoding="utf-8") as f:
-    f.write(response_refactored)
-  return response_refactored
+    f.write(response)
+  return response
 
 
 #-----------------------------------------------------------------
@@ -154,3 +190,118 @@ def create_cyml_code(api_key_path, agent_cymltranspile, model, python_module, al
   response_cyml = send_to_gpt(instructions_transpile, prompt_transpiled, api_key, model, "high", "text", "low")
 
   return response_cyml
+
+
+#-----------------------------------------------------------------
+# Function to debug CyML code for modelUnit
+# This function proposes corrections for a CyML module modelUnit.
+#-----------------------------------------------------------------
+def create_debug_code_unit(api_key_path, agent_debug_code, agent_choose, agent_apply_code, agent_apply_xml, 
+                    model, cyml_module, algo_meta, error_msg, apply_correction):
+  
+  api_key = extract_api_key(api_key_path)
+  instructions_debug = extract_text(agent_debug_code)
+
+  prompt_debug = prompt_debug_code_unit(cyml_module, algo_meta, error_msg)
+  response = send_to_gpt(instructions_debug, prompt_debug, api_key, model, "high", "text", "medium")
+  file_to_modify = ""
+  response_xml = ""
+  response_code = ""
+
+  if apply_correction:
+    instructions_choose = extract_text(agent_choose)
+    prompt_code_or_xml = prompt_choose(response)
+    response_choose = send_to_gpt(instructions_choose, prompt_code_or_xml, api_key, model, "medium", "json_object", "low")
+    json_response = json.loads(response_choose)
+
+    file_to_modify = json_response.get("modifs").get("type", "")
+
+    if file_to_modify == "XML" or file_to_modify == "BOTH":
+      instructions_apply = extract_text(agent_apply_xml)
+      prompt_apply = prompt_apply_xml(algo_meta, response)
+      response_xml = send_to_gpt(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")
+
+    if file_to_modify == "CODEBASE" or file_to_modify == "BOTH":
+      instructions_apply = extract_text(agent_apply_code)
+      prompt_apply = prompt_apply_code_unit(cyml_module, error_msg, response)
+      response_code = send_to_gpt(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")   
+
+  return response, response_xml, response_code, file_to_modify
+
+
+#-----------------------------------------------------------------
+# Function to debug XML documentation for modelUnit
+# This function proposes corrections for a XML documentation modelUnit.
+#-----------------------------------------------------------------
+def create_debug_xml_unit(api_key_path, agent_debug, agent_apply, model, algo_meta, error_msg, apply_correction):
+  api_key = extract_api_key(api_key_path)
+  instructions_debug = extract_text(agent_debug)
+
+  prompt_debug = prompt_debug_xml_unit(algo_meta, error_msg)
+  response = send_to_gpt(instructions_debug, prompt_debug, api_key, model, "high", "text", "medium")
+
+  if apply_correction:
+    instructions_apply = extract_text(agent_apply)
+    prompt_apply = prompt_apply_xml(algo_meta, response)
+    response = send_to_gpt(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")
+
+  return response
+
+
+#-----------------------------------------------------------------
+# Function to debug XML documentation for modelComposite
+# This function proposes corrections for a XML documentation modelComposite.
+#-----------------------------------------------------------------
+def create_debug_xml_composite(api_key_path, agent_debug, agent_apply, model, algo_meta, algo_metas, error_msg, apply_correction):
+  api_key = extract_api_key(api_key_path)
+  instructions_debug = extract_text(agent_debug)
+
+  prompt_debug = prompt_debug_xml_composite(algo_meta, algo_metas, error_msg)
+  response = send_to_gpt(instructions_debug, prompt_debug, api_key, model, "high", "text", "medium")
+
+  if apply_correction:
+    instructions_apply = extract_text(agent_apply)
+    prompt_apply = prompt_apply_xml(algo_meta, response)
+    response = send_to_gpt(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")
+
+  return response
+
+
+#-----------------------------------------------------------------
+# Function to debug CyML code for ModelComposite
+# This function proposes corrections for a CyML module modelComposite.
+#-----------------------------------------------------------------
+def create_debug_code_composite(api_key_path, agent_debug_code, agent_choose, agent_apply_code, agent_apply_xml, 
+                    model, cyml_module, composite_meta, algo_metas, error_msg, apply_correction):
+  api_key = extract_api_key(api_key_path)
+  instructions_debug = extract_text(agent_debug_code)
+
+  prompt_debug = prompt_debug_composite(cyml_module, composite_meta, algo_metas, error_msg)
+  response = send_to_gpt(instructions_debug, prompt_debug, api_key, model, "high", "text", "medium")
+
+  file_to_modify = ""
+  response_xml = ""
+  response_code = ""
+
+  if apply_correction:
+    instructions_choose = extract_text(agent_choose)
+    prompt_code_or_xml = prompt_choose(response)
+    response_choose = send_to_gpt(instructions_choose, prompt_code_or_xml, api_key, model, "medium", "json_object", "low")
+    json_response = json.loads(response_choose)
+
+    file_to_modify = json_response.get("modifs").get("type", "")
+
+    if file_to_modify == "XML" or file_to_modify == "BOTH":
+      instructions_apply = extract_text(agent_apply_xml)
+      prompt_apply = prompt_apply_xml(composite_meta, response)
+      response_xml = send_to_gpt(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")
+      
+    if file_to_modify == "CODEBASE" or file_to_modify == "BOTH":
+      instructions_apply = extract_text(agent_apply_code)
+      prompt_apply = prompt_apply_code_unit(cyml_module, error_msg, response)
+      response_code = send_to_gpt(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")   
+
+  return response, response_xml, response_code, file_to_modify
+
+
+  

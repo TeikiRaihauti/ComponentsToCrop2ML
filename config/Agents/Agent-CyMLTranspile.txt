@@ -36,6 +36,7 @@ Only local, function-internal temporaries may be declared with cdef.
 	- Exceptions (must be replaced by explicit checks).
 	- Imports (must be removed).
 	- global keyword is prohibited, better pass variables by signature.
+	- casting is prohibited -> int(variable) / float(variable) /...
 
 # FUNCTION DEFINITION RULES (HARD REQUIREMENTS)
 All functions must strictly follow these formatting and structural rules:

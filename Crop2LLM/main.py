@@ -1,111 +1,218 @@
-import os
-from pathlib import Path
-from cookiecutter.main import cookiecutter
 import argparse
-import shutil
+import os
+import sys
 from utilities import check_files
-from openAI_interaction import create_python_code, create_unit_metadata, create_algo_metadata, create_composite_metadata
-from json2XML import json_to_XML_composite, json_to_XML_unit
-from transpiler import transpile_functions
+from generation import maj_component, process_unit, process_composite, create_crop2ml_package, generate_component
+from verification import check_code_composite, debug_code, debug_xml, generate_pyx_composite, generate_pyx_unit, check_code_unit
+import concurrent.futures
+import time
 
 #-----------------------------------------------------------------
-#CONFIGURATION
+# CONFIGURATION
 #-----------------------------------------------------------------
 API_KEY_PATH = "./config/api_key.txt"
-BIG_MODEL = "gpt-5.2"
+BIG_MODEL = "gpt-5.3-codex"
 SMALL_MODEL = "gpt-5-mini"
 COOKIE_CUTTER_TEMPLATE = "./config/cookiecutter-crop2ml/"
-LOG_FILE = "Crop2LLM_log.txt"
-LANGUAGES = ['cs','cpp','py','f90','java','simplace','sirius', 'openalea','apsim','dssat','stics','bioma']
+LOG_FILE = "Crop2LLM_report.txt"
+REPORT_FILE = "Transformation_report.txt"
+LANGUAGES = ['r', 'cs', 'py', 'f90', 'apsim', 'dssat', 'stics', 'bioma', 'sirius', 'java', 'openalea', 'simplace','cpp']
+NUMBER_CANDIDATES = 3
+MAX_PARALLEL_UNITS = 5
+NUMBER_ITERATIONS = 20
 
 UNIT_META = "./config/Agents/Agent-UnitMeta.txt"
 COMPOSITE_META = "./config/Agents/Agent-CompositeMeta.txt"
 PY_REFACTOR = "./config/Agents/Agent-PyRefactor.txt"
+PY_CONSENSUS = "./config/Agents/Agent-PyConsensus.txt"
 CYML_TRANSPILE = "./config/Agents/Agent-CyMLTranspile.txt"
 ALGO_META = "./config/Agents/Agent-AlgoMeta.txt"
+DEBUG_CYML = "./config/Agents/Agent-DebugCode.txt"
+DEBUG_XML = "./config/Agents/Agent-DebugXML.txt"
+APPLY_CODE = "./config/Agents/Agent-ApplyCode.txt"
+APPLY_XML = "./config/Agents/Agent-ApplyXML.txt"
+CODE_OR_XML = "./config/Agents/Agent-CodeOrXML.txt"
 CONFIG_FILES = [
-    UNIT_META,
-    COMPOSITE_META,
-    PY_REFACTOR,
-    CYML_TRANSPILE,
-    ALGO_META,
-    API_KEY_PATH
+  API_KEY_PATH,
+  UNIT_META,
+  COMPOSITE_META,
+  PY_REFACTOR,
+  PY_CONSENSUS,
+  CYML_TRANSPILE,
+  ALGO_META,
+  DEBUG_CYML,
+  DEBUG_XML,
+  APPLY_CODE,
+  APPLY_XML,
+  CODE_OR_XML
 ]
 
 #-----------------------------------------------------------------
 # Simulation section
+# Generate a complete Crop2ML component from model units and composite in the output folder defined
 #-----------------------------------------------------------------
 if __name__ == "__main__":
-  # Read arguments from command line
-  parser = argparse.ArgumentParser(description="Process crop model units and composite.")
-  parser.add_argument('-u', '--unit', action='append', nargs='+', required=True, help='Model unit files (can be specified multiple times)')
+  parser = argparse.ArgumentParser(description="Transform crop model components into Crop2ML component and vice-versa.")
+  parser.add_argument('-u', '--unit', action='append', nargs='+', required=False, help='Model unit files (can be specified multiple times)')
   parser.add_argument('-c', '--composite', required=False, help='Model composite file')
-  parser.add_argument('-o', '--output', required=True, help='Output folder')
+  parser.add_argument('-o', '--output', required=False, help='Output folder')
+  parser.add_argument('-p', '--package', required=False, help='Model package directory')
   args = parser.parse_args()
 
-  # Flatten model_units list (action='append' with nargs='+' creates nested list)
-  model_units = args.unit
-  model_composite = args.composite
-  output_folder = args.output
-  desc_metas = []
-  algo_metas = []
-  XML_units = []
-  codes = []
-  functions_transpiled = []
-  check_files(*model_units, comp=model_composite, config_files=CONFIG_FILES, log_file=LOG_FILE, output_folder=output_folder)
+  if args.unit is not None :
+    if args.package is not None :
+      parser.error("You must choose between --unit and --package, not both.")
 
-  # Process each model unit
-  for group_id, group in enumerate(model_units):
-    main_file = group[0]
-    helper_files = group[1:]
-    model_unit_name = Path(main_file).stem
+    elif args.output is None:
+      parser.error("Output folder must be specified when using --unit.")
 
-    print(f"Processing descriptive metadata of the model unit {group_id+1} : {model_unit_name}...")
-    metadata = create_unit_metadata(API_KEY_PATH, UNIT_META, SMALL_MODEL, output_folder, main_file, helper_files)
-    desc_metas.append(metadata)
-
-    print(f"Refactoring the model...")
-    code = create_python_code(API_KEY_PATH, PY_REFACTOR, BIG_MODEL, output_folder, main_file, helper_files)
-    codes.append(code)
-
-    print(f"Processing algorithmic metadata...")
-    algo = create_algo_metadata(API_KEY_PATH, ALGO_META, BIG_MODEL, output_folder, code, main_file)
-    algo_metas.append(algo)
-
-    print("Transpiling each function into CyML...")
-    functions_transpiled.append(transpile_functions(code, algo, metadata, API_KEY_PATH, BIG_MODEL, CYML_TRANSPILE, output_folder))
-
-    print("Generating the XML file...")
-    if model_composite is None :
-      XML_units.append(json_to_XML_unit(main_file, output_folder, metadata, algo, LOG_FILE))
+    #-----------------------------------------------------------------
+    # SECTION : From crop model component to Crop2ML 
     else :
-      XML_units.append(json_to_XML_unit(model_composite, output_folder, metadata, algo, LOG_FILE))  
+      model_units = args.unit
+      model_composite = args.composite
+      output_folder = args.output
+      XML_units = []
+      codes = []
+      functions_transpiled = []
 
-  # Process model composite
-  print(f"Generating the composite model...")
-  composite_metadata = create_composite_metadata(API_KEY_PATH, COMPOSITE_META, SMALL_MODEL, output_folder, XML_units, model_composite)
-  if model_composite is None :
-    model_composite = model_units[0][0]
-  xml_composite = json_to_XML_composite(model_composite, output_folder, composite_metadata, XML_units)
+      check_files(*model_units, comp=model_composite, config_files=CONFIG_FILES, log_file=LOG_FILE, output_folder=output_folder)
 
-  # Create cookiecutter project
-  print(f"Generating Crop2ML project for the model component")
-  metadata = composite_metadata['metadata']
-  cookiecutter(COOKIE_CUTTER_TEMPLATE, 
-    no_input=True,
-    overwrite_if_exists=True,
-    extra_context={'project_name':Path(model_composite).stem, 
-                  'repo_name':Path(model_composite).stem,
-                  'author_name': metadata['Authors'],
-                  'description': metadata['Extended description'], 
-                  'open_source_license':"MIT"},
-    output_dir=output_folder)
-  
-  # Move generated files to the cookiecutter project directory
-  for xml_file in XML_units:
-    shutil.copy(xml_file, f"{output_folder}/{Path(model_composite).stem}/crop2ml/")
-  shutil.copy(xml_composite, f"{output_folder}/{Path(model_composite).stem}/crop2ml/")
+      # Process each model unit concurrently
+      print("Generating modelunits...")
+      with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_PARALLEL_UNITS) as executor:
+        futures = [
+          executor.submit(process_unit, API_KEY_PATH, UNIT_META, PY_REFACTOR, ALGO_META, CYML_TRANSPILE, PY_CONSENSUS,
+                          SMALL_MODEL, BIG_MODEL, NUMBER_CANDIDATES, LOG_FILE, grp, model_composite, output_folder)
+          for idx, grp in enumerate(model_units)
+        ]
+        for fut in concurrent.futures.as_completed(futures):
+          xml, functions = fut.result()
+          XML_units.append(xml)
+          functions_transpiled.append(functions)
 
-  for function_transpiled in functions_transpiled:
-    for function in function_transpiled:
-      shutil.copy(function, f"{output_folder}/{Path(model_composite).stem}/crop2ml/algo/pyx/")
+      # To delete
+      start = time.time()
+
+      # Process model composite
+      print(f"Generating the composite model...")
+      composite_metadata, xml_composite, model_composite = process_composite(API_KEY_PATH, COMPOSITE_META, SMALL_MODEL, output_folder, XML_units, model_composite, LOG_FILE, model_units[0][0])
+      
+      # To delete
+      end = time.time()
+      print(f"Time elapsed for processing composite: {end - start} seconds")
+      
+      # Create cookiecutter project
+      print(f"Generating Crop2ML project for the model component...")
+      project_dir = create_crop2ml_package(COOKIE_CUTTER_TEMPLATE, output_folder, model_composite, composite_metadata, XML_units, xml_composite, functions_transpiled, LOG_FILE)
+
+      print(f"Crop2ML package generated successfully in {project_dir} !")
+      print(f"Check {LOG_FILE} for more details during the automatic transformation !")
+
+  #-----------------------------------------------------------------
+  # SECTION : From Crop2ML to crop model component
+  elif args.package is not None:
+    package = args.package
+    verif_result = False
+    code_generated = False
+    iteration = 0
+    report_path = os.path.join(package, REPORT_FILE)
+
+    check_files([], comp=None, config_files=CONFIG_FILES, log_file=REPORT_FILE, output_folder=package)
+
+    # To delete
+    start = time.time()
+
+    print("Checking code generated...")
+    while not code_generated and iteration < NUMBER_ITERATIONS:
+      iteration += 1
+      with open(report_path, 'a') as rf:
+        rf.write(f"GENERATING PYX CODE --- ATTEMPT {iteration} ---\n\n")
+      try:
+        code_generated = generate_pyx_unit(package, report_path)
+      except Exception as e:
+        print("Error during code generation, trying to fix it...")
+      if not code_generated:
+        debug_xml(API_KEY_PATH, DEBUG_XML, APPLY_XML, BIG_MODEL, package, report_path, iteration < NUMBER_ITERATIONS)
+
+    if not code_generated:
+      print("Code generation failed. Please check the report for details.")
+      sys.exit()
+    
+    iteration = 0
+    while not verif_result and iteration < NUMBER_ITERATIONS:
+      iteration += 1
+      with open(report_path, 'a') as rf:
+        rf.write(f"CHECKING CODE GENERATED --- ATTEMPT {iteration} ---\n\n")
+      try:
+        verif_result = check_code_unit(package, report_path)
+      except Exception as e:
+        print("Error during code verification, trying to fix it...")
+      if not verif_result:
+        debug_code(API_KEY_PATH, DEBUG_CYML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, iteration < NUMBER_ITERATIONS)
+      
+    if not verif_result:
+      print("Code verification failed. Please check the report for details.")
+      sys.exit()
+
+    iteration = 0
+    code_generated = False
+    while not code_generated and iteration < NUMBER_ITERATIONS:
+      iteration += 1
+      with open(report_path, 'a') as rf:
+        rf.write(f"GENERATING COMPOSITE CODE --- ATTEMPT {iteration} ---\n\n")
+      try:
+        code_generated = generate_pyx_composite(package, report_path)
+      except Exception as e:
+        print("Error during code composite generation, trying to fix it...")
+      if not code_generated:
+        debug_xml(API_KEY_PATH, DEBUG_CYML, DEBUG_XML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, iteration < NUMBER_ITERATIONS)
+      
+    if not code_generated:
+      print("Code generation failed. Please check the report for details.")
+      sys.exit()
+
+    iteration = 0
+    verif_result = False
+    while not verif_result and iteration < NUMBER_ITERATIONS:
+      iteration += 1
+      with open(report_path, 'a') as rf:
+        rf.write(f"CHECKING CODE COMPOSITE GENERATED --- ATTEMPT {iteration} ---\n\n")
+      try:
+        verif_result = check_code_composite(package, report_path)
+      except Exception as e:
+        print("Error during code verification, trying to fix it...")
+      if not verif_result:
+        debug_code(API_KEY_PATH, DEBUG_CYML, APPLY_XML, APPLY_CODE, CODE_OR_XML, BIG_MODEL, package, report_path, iteration < NUMBER_ITERATIONS)
+      
+    if not verif_result:
+      print("Code verification failed. Please check the report for details.")
+      sys.exit()
+
+    else:
+      print("All files parsed and AST generated successfully.")
+      pyx_folder = os.path.join(package, 'src', 'pyx')
+      crop2ml_folder = os.path.join(package, 'crop2ml')
+      maj_component(package, pyx_folder, crop2ml_folder)
+
+      for language in LANGUAGES:
+        print(f"Transpiling into {language}...")
+        try:
+          generate_component(package, language)
+          with open(report_path, 'a') as rf:
+            rf.write(f"Component generated successfully in {language}.\n")
+        except Exception as e:
+          with open(report_path, 'a') as rf:
+            rf.write(f"Error occurred while generating component for {language}: \n{e}\n")
+          continue
+    
+    # To delete
+      end = time.time()
+      print(f"Time elapsed for debugging: {end - start} seconds")
+
+  else:
+    parser.error("At least one of --unit or --package must be provided.")
+
+
+
+  #generate_component(package, "bioma")

@@ -9,7 +9,6 @@ Output a single JSON object. Do not include any extra text, explanations, or key
 - Use function and variable names exactly as they appear in the code.
 - If something is missing or not applicable, write "-".
 - Be exhaustive per the classification rules.
-- A state variable is always an input and an output.
 - Length of a collection should be a fixed value or a variable clearly defined in the JSON.
 
 # DEFINITIONS
@@ -77,7 +76,6 @@ Output a single JSON object. Do not include any extra text, explanations, or key
 - Identify functions or blocks uses as testing the component behaviour.
 - Provide test name, description, and any fixed input and expected output values used in assertions.
 - If no tests found, use "-".
-
 
 # OUTPUT SCHEMA
 ```json

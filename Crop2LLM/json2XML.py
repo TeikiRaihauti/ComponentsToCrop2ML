@@ -1,8 +1,7 @@
 from pathlib import Path
 import xml.dom.minidom
 import xml.etree.ElementTree as ET
-import os
-from utilities import extract_text
+from utilities import extract_text, log_comments
 
 #-----------------------------------------------------------------
 # Function to convert JSON data to XML format
@@ -16,6 +15,11 @@ def convert_unit(file_path, json_metadata, json_code):
   outputs = json_code.get('outputs',[])
   functions = json_code.get('functions', [])
   tests = json_code['tests']
+
+  if init != '-' and init != []:
+    init_name = init.get('name', '-')
+  else:
+    init_name = '-'
 
   # Create XML tree
   root = ET.Element('ModelUnit', {
@@ -43,7 +47,7 @@ def convert_unit(file_path, json_metadata, json_code):
   add_outputs(xml_outputs, outputs)
 
   # Initialization
-  if init['name'] != '-':
+  if init_name != '-':
     ET.SubElement(root, 'Initialization', {
       'name': f"init_{metadata['Title']}",
       'language': 'cyml',
@@ -53,7 +57,7 @@ def convert_unit(file_path, json_metadata, json_code):
   # Functions
   if functions != '-' and functions != []:
     for func in functions:
-      if func['name'] != "-" and func['name'] != init['name'] and func['name'] != process['name']:
+      if func['name'] != "-" and func['name'] != init_name and func['name'] != process['name']:
         ET.SubElement(root, 'Function', {
           'name': func['name'],
           'description': func['description'],
@@ -141,12 +145,17 @@ def add_outputs(xml_outputs, json_outputs):
     attrs['unit'] = str(output.get('unit', ''))
     attrs['uri'] = str(output.get('uri', ''))
 
+    if str(output.get('max')) == "-" or str(output.get('max')) == "None":
+      attrs['max'] = ""
+    if str(output.get('min')) == "-" or str(output.get('min')) == "None":
+      attrs['min'] = ""
+
     # Validate that default, max, min are numerical when datatype is numerical
     numerical_types = ['DOUBLE', 'DOUBLELIST', 'DOUBLEARRAY', 'INTEGER', 'INTEGERLIST', 'INTEGERARRAY']
     is_numerical_datatype = any(numeric_type in str(output.get('datatype', '')).upper() for numeric_type in numerical_types)
     
     if is_numerical_datatype:
-      for attr_key in ['default', 'max', 'min', "len"]:
+      for attr_key in ['max', 'min', "len"]:
         attr_value = attrs.get(attr_key, '')
         if attr_value and attr_value != '':
           try:
@@ -168,6 +177,9 @@ def add_tests(root_XML, json_tests, json_inputs):
   if json_tests == [] or json_tests[0] == "-" or json_tests[0] == "" or json_tests[0].get('name') == "-":
     return
   
+  return
+
+  #TO-DO : add the tests detected in the XML
   parameter_inputs = []
   variable_inputs = []
   inputtype_by_name = {inp['name']: inp.get('inputtype', '') for inp in json_inputs}
@@ -280,8 +292,21 @@ def convert_composite(file_path, json_metadata, XML_units):
           'target': output_name,
           'source': f"{unit_name}.{output_name}"
         })
+
+  for link in link_data:
+    for unit_path in XML_units:
+      if Path(unit_path).stem == f"unit.{link['Target model unit']}":
+        unit = extract_text(unit_path)
+        root_unit = ET.fromstring(unit)
+        for input_elem in root_unit.findall('.//Input'):
+          input_name = input_elem.attrib.get('name')
+          if input_name == link['Target variable name']:
+            input_elem.attrib['variablecategory'] = 'auxiliary'
+            with open(unit_path, 'wb') as f:
+              f.write(ET.tostring(root_unit, encoding='utf-8'))
   
   return ET.tostring(root, encoding='utf-8')
+
 
 #-----------------------------------------------------------------
 # Function to create Crop2ML XML file from JSON metadata and algorithm
@@ -295,24 +320,7 @@ def json_to_XML_unit(model_composite, output_path, json_metadata, json_algo, log
   with open(xml_path, 'w', encoding='utf-8') as f:
     f.write(dom.toprettyxml())
 
-  # Write comments from json_algo into the log file (append)
-  comments = json_algo.get('comments', [])
-  try:
-    log_path = os.path.join(output_path, log_file)
-    with open(log_path, 'a', encoding='utf-8') as lf:
-      lf.write(f"--- {metadata['Title']} ---\n")
-      if isinstance(comments, str):
-        lf.write(comments + "\n")
-      elif isinstance(comments, list):
-        for c in comments:
-          if isinstance(c, dict):
-            comment_text = c.get('comment', str(c))
-            lf.write(comment_text + "\n")
-          else:
-            lf.write(str(c) + "\n")
-      lf.write("\n")
-  except Exception:
-    pass
+  log_comments(json_algo, output_path, log_file, metadata['Title'])
 
   return xml_path
 
@@ -321,11 +329,68 @@ def json_to_XML_unit(model_composite, output_path, json_metadata, json_algo, log
 # Function to create Crop2ML XML file from JSON metadata and algorithm
 # This function generates a Crop2ML XML file from given JSON metadata and algorithm.
 #-----------------------------------------------------------------
-def json_to_XML_composite(model_composite, output_path, json_metadata, XML_units):
+def json_to_XML_composite(model_composite, output_path, json_metadata, XML_units, log_file):
   base = Path(model_composite).stem
   xml_path = output_path + "/" + "composition." + base + ".xml"
   xml_data = convert_composite(model_composite, json_metadata, XML_units)
   dom = xml.dom.minidom.parseString(xml_data.decode('utf-8') if isinstance(xml_data, bytes) else xml_data)
   with open(xml_path, 'w', encoding='utf-8') as f:
     f.write(dom.toprettyxml())
+
+  log_comments(json_metadata, output_path, log_file, "Composite model")
+
   return xml_path
+
+
+#-----------------------------------------------------------------
+# Function to format a Crop2ML XML file
+#-----------------------------------------------------------------
+def format_xml(xml_data):
+  root = ET.fromstring(xml_data)
+  
+  for input_elem in root.findall('.//Input'):
+    attrs = input_elem.attrib
+    
+    if str(attrs.get('default', '')) == "-" or str(attrs.get('default', '')) == "None":
+      attrs['default'] = ""
+    if str(attrs.get('max', '')) == "-" or str(attrs.get('max', '')) == "None":
+      attrs['max'] = ""
+    if str(attrs.get('min', '')) == "-" or str(attrs.get('min', '')) == "None":
+      attrs['min'] = ""
+
+    # Validate that default, max, min are numerical when datatype is numerical
+    numerical_types = ['DOUBLE', 'DOUBLELIST', 'DOUBLEARRAY', 'INTEGER', 'INTEGERLIST', 'INTEGERARRAY']
+    is_numerical_datatype = any(numeric_type in str(attrs.get('datatype', '')).upper() for numeric_type in numerical_types)
+    
+    if is_numerical_datatype:
+      for attr_key in ['default', 'max', 'min', "len"]:
+        attr_value = attrs.get(attr_key, '')
+        if attr_value and attr_value != '':
+          try:
+            float(attr_value)
+          except ValueError:
+            attrs[attr_key] = ""
+
+  for output_elem in root.findall('.//Output'):
+    attrs = output_elem.attrib
+    
+    if str(attrs.get('max', '')) == "-" or str(attrs.get('max', '')) == "None":
+      attrs['max'] = ""
+    if str(attrs.get('min', '')) == "-" or str(attrs.get('min', '')) == "None":
+      attrs['min'] = ""
+
+    # Validate that default, max, min are numerical when datatype is numerical
+    numerical_types = ['DOUBLE', 'DOUBLELIST', 'DOUBLEARRAY', 'INTEGER', 'INTEGERLIST', 'INTEGERARRAY']
+    is_numerical_datatype = any(numeric_type in str(attrs.get('datatype', '')).upper() for numeric_type in numerical_types)
+    
+    if is_numerical_datatype:
+      for attr_key in ['max', 'min', "len"]:
+        attr_value = attrs.get(attr_key, '')
+        if attr_value and attr_value != '':
+          try:
+            float(attr_value)
+          except ValueError:
+            attrs[attr_key] = ""
+  
+  # Return the formatted XML as string
+  return ET.tostring(root, encoding='utf-8')
