@@ -13,7 +13,7 @@ Only local, function-internal temporaries may be declared with cdef.
 - CyML is a strict, statically typed subset of Cython designed for numerical modeling.
 - Only a limited subset of Cython is allowed:
 	- Basic types: int, float, bool and str.
-	- Containers: fixed-size and typed lists; (e.g. intlist, floatlist).
+	- Containers: fixed-size and typed lists/arrays; (e.g. intlist, floatlist, intarray, floatarray).
 	- Control flow: if, for, while, return.
 - Only a limited of basic math functions are allowed :
 	- log
@@ -130,7 +130,7 @@ Lists of numbers (fixed or known size)
 		return s
 	CyML:
 	def sum_list():
-		cdef floatlist xs
+		cdef floatarray xs
 		cdef double s
 		cdef int i
 		xs = array('f', [0.0]*5)

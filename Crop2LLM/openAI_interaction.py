@@ -1,10 +1,12 @@
+import re
 from openai import OpenAI
+import anthropic
 import os
 from pathlib import Path
 import json
 from utilities import extract_text, extract_extension, language
 from prompt_creation import prompt_apply_code_unit, prompt_apply_xml, prompt_choose, prompt_debug_code_unit, prompt_debug_xml_composite, prompt_debug_xml_unit, prompt_unit
-from prompt_creation import prompt_composite, prompt_refactor, prompt_transpile, prompt_debug_composite, prompt_consensus_JSON, prompt_consensus_python
+from prompt_creation import prompt_composite, prompt_refactor, prompt_transpile, prompt_debug_composite, prompt_consensus_JSON, prompt_consensus_python, prompt_clean_code
 
 #-----------------------------------------------------------------
 # Function to connect to OpenAI's API
@@ -24,33 +26,53 @@ def extract_api_key(API_KEY_PATH):
 # Function to send instructions and prompt to OpenAI's model
 # This function takes instructions, a prompt, an API key, and a model name and returns the response from the model.
 #-----------------------------------------------------------------
-def send_to_gpt(instructions, prompt, api_key, model, reasoning_effort, text_format, verbosity):
-  client = OpenAI(api_key = api_key)
+def send_to_llm(instructions, prompt, api_key, model, reasoning_effort, text_format, verbosity):
+  if "gpt" in model:
+    client = OpenAI(api_key = api_key)
 
-  response = client.responses.create(
-    model=model,
-    reasoning={"effort": reasoning_effort},
-    store=True,
-    text={
-      "format": {"type": text_format},
-      "verbosity": verbosity,
-      },
-    input=[
-      {"role": "developer",
-        "content": [{"type": "input_text", "text": instructions}],
-      },
-      {
-        "role": "user",
-        "content": [{"type": "input_text", "text": prompt}],
-      }
-    ],
-  )
+    response = client.responses.create(
+      model=model,
+      reasoning={"effort": reasoning_effort},
+      store=True,
+      text={
+        "format": {"type": text_format},
+        "verbosity": verbosity,
+        },
+      input=[
+        {"role": "developer",
+          "content": [{"type": "input_text", "text": instructions}],
+        },
+        {
+          "role": "user",
+          "content": [{"type": "input_text", "text": prompt}],
+        }
+      ],
+    )
 
-  response = response.output_text
-  if response.startswith("```json"):
-    response = response[7:].lstrip()
-  if response.endswith("```"):
-    response = response[:-3].rstrip()
+    response = response.output_text
+    response = re.sub(r'^\s*```(?:json|python|cython|cyml)?\s*$', '', response, flags=re.MULTILINE)
+    response = response.lstrip()
+  
+  else:
+    client = anthropic.Anthropic(api_key = api_key)
+
+    response = client.messages.create(
+      model = model,
+      system=instructions,
+      max_tokens=20000,
+      messages = [
+        { "role": "user", "content": prompt}
+      ],
+      thinking= {"type": "adaptive"},
+      output_config= {"effort": reasoning_effort}
+    )
+
+    for block in response.content:
+      if block.type == "text":
+        response = block.text
+        response = re.sub(r'^\s*```(?:json|python|cython|cyml)?\s*$', '', response, flags=re.MULTILINE)
+        response = response.lstrip()
+    
   return(response)
 
 
@@ -65,7 +87,7 @@ def create_unit_metadata(api_key_path, agent_descmeta, model, output_path, main_
   instructions_metadata = extract_text(agent_descmeta)
 
   prompt = prompt_unit(main_file, language_name, helper_files)
-  response_metadata = send_to_gpt(instructions_metadata, prompt, api_key, model, "medium", "json_object", "low")
+  response_metadata = send_to_llm(instructions_metadata, prompt, api_key, model, "medium", "json_object", "low")
 
   os.makedirs(output_path, exist_ok=True)
   base = Path(main_file).stem
@@ -85,7 +107,7 @@ def create_composite_metadata(api_key_path, agent_compositemeta, model, output_p
   api_key = extract_api_key(api_key_path)
   instructions_metadata = extract_text(agent_compositemeta)
   prompt = prompt_composite(modelunits, main_file)
-  response_metadata = send_to_gpt(instructions_metadata, prompt, api_key, model, "high", "json_object", "low")
+  response_metadata = send_to_llm(instructions_metadata, prompt, api_key, model, "high", "json_object", "low")
 
   os.makedirs(output_path, exist_ok=True)
   if (main_file is None):
@@ -108,7 +130,7 @@ def create_algo_metadata(api_key_path, agent_algometa, model, python_code):
   instructions_json = extract_text(agent_algometa)
 
   prompt = prompt_refactor(python_code)
-  response = send_to_gpt(instructions_json, prompt, api_key, model, "high", "json_object", "low")
+  response = send_to_llm(instructions_json, prompt, api_key, model, "high", "json_object", "low")
   json_code = json.loads(response)
 
   return json_code
@@ -126,7 +148,7 @@ def create_consensus_JSON(api_key_path, agent_algo_consensus, model, jsons, main
   instructions_algo_consensus = extract_text(agent_algo_consensus)
 
   prompt = prompt_consensus_JSON(jsons, main_file, language_name)
-  response = send_to_gpt(instructions_algo_consensus, prompt, api_key, model, "high", "json_object", "low")
+  response = send_to_llm(instructions_algo_consensus, prompt, api_key, model, "high", "json_object", "low")
 
   os.makedirs(output_path, exist_ok=True)
   base = Path(main_file).stem
@@ -150,7 +172,7 @@ def create_python_code(api_key_path, agent_pyrefactor, model, main_file, helper_
   instructions_refactor = extract_text(agent_pyrefactor)
 
   prompt = prompt_unit(main_file, language_name, helper_files)
-  response_refactored = send_to_gpt(instructions_refactor, prompt, api_key, model, "high", "text", "low")
+  response_refactored = send_to_llm(instructions_refactor, prompt, api_key, model, "high", "text", "low")
 
   return response_refactored
 
@@ -167,7 +189,7 @@ def create_consensus_python(api_key_path, agent_py_consensus, model, codes, main
   instructions_py_consensus = extract_text(agent_py_consensus)
 
   prompt = prompt_consensus_python(codes, main_file, language_name, helper_files)
-  response = send_to_gpt(instructions_py_consensus, prompt, api_key, model, "high", "text", "low")
+  response = send_to_llm(instructions_py_consensus, prompt, api_key, model, "high", "text", "low")
 
   os.makedirs(output_path, exist_ok=True)
   base = Path(main_file).stem
@@ -187,9 +209,23 @@ def create_cyml_code(api_key_path, agent_cymltranspile, model, python_module, al
   instructions_transpile = extract_text(agent_cymltranspile)
 
   prompt_transpiled = prompt_transpile(python_module, algo_meta)
-  response_cyml = send_to_gpt(instructions_transpile, prompt_transpiled, api_key, model, "high", "text", "low")
+  response_cyml = send_to_llm(instructions_transpile, prompt_transpiled, api_key, model, "high", "text", "low")
 
   return response_cyml
+
+
+#-----------------------------------------------------------------
+# Function to clean CyML code
+# This function generates a cleaned Cython module for a given code file and saves it.
+#-----------------------------------------------------------------
+def create_clean_code(api_key_path, agent_cleaner, model, pyx_path):
+  api_key = extract_api_key(api_key_path)
+  instructions_cleaner = extract_text(agent_cleaner)
+
+  prompt = prompt_clean_code(pyx_path)
+  response_cleaned = send_to_llm(instructions_cleaner, prompt, api_key, model, "medium", "text", "low")
+
+  return response_cleaned, pyx_path
 
 
 #-----------------------------------------------------------------
@@ -203,7 +239,7 @@ def create_debug_code_unit(api_key_path, agent_debug_code, agent_choose, agent_a
   instructions_debug = extract_text(agent_debug_code)
 
   prompt_debug = prompt_debug_code_unit(cyml_module, algo_meta, error_msg)
-  response = send_to_gpt(instructions_debug, prompt_debug, api_key, model, "high", "text", "medium")
+  response = send_to_llm(instructions_debug, prompt_debug, api_key, model, "high", "text", "medium")
   file_to_modify = ""
   response_xml = ""
   response_code = ""
@@ -211,7 +247,7 @@ def create_debug_code_unit(api_key_path, agent_debug_code, agent_choose, agent_a
   if apply_correction:
     instructions_choose = extract_text(agent_choose)
     prompt_code_or_xml = prompt_choose(response)
-    response_choose = send_to_gpt(instructions_choose, prompt_code_or_xml, api_key, model, "medium", "json_object", "low")
+    response_choose = send_to_llm(instructions_choose, prompt_code_or_xml, api_key, model, "medium", "json_object", "low")
     json_response = json.loads(response_choose)
 
     file_to_modify = json_response.get("modifs").get("type", "")
@@ -219,12 +255,12 @@ def create_debug_code_unit(api_key_path, agent_debug_code, agent_choose, agent_a
     if file_to_modify == "XML" or file_to_modify == "BOTH":
       instructions_apply = extract_text(agent_apply_xml)
       prompt_apply = prompt_apply_xml(algo_meta, response)
-      response_xml = send_to_gpt(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")
+      response_xml = send_to_llm(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")
 
     if file_to_modify == "CODEBASE" or file_to_modify == "BOTH":
       instructions_apply = extract_text(agent_apply_code)
       prompt_apply = prompt_apply_code_unit(cyml_module, error_msg, response)
-      response_code = send_to_gpt(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")   
+      response_code = send_to_llm(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low") 
 
   return response, response_xml, response_code, file_to_modify
 
@@ -238,12 +274,12 @@ def create_debug_xml_unit(api_key_path, agent_debug, agent_apply, model, algo_me
   instructions_debug = extract_text(agent_debug)
 
   prompt_debug = prompt_debug_xml_unit(algo_meta, error_msg)
-  response = send_to_gpt(instructions_debug, prompt_debug, api_key, model, "high", "text", "medium")
+  response = send_to_llm(instructions_debug, prompt_debug, api_key, model, "high", "text", "medium")
 
   if apply_correction:
     instructions_apply = extract_text(agent_apply)
     prompt_apply = prompt_apply_xml(algo_meta, response)
-    response = send_to_gpt(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")
+    response = send_to_llm(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")
 
   return response
 
@@ -257,12 +293,12 @@ def create_debug_xml_composite(api_key_path, agent_debug, agent_apply, model, al
   instructions_debug = extract_text(agent_debug)
 
   prompt_debug = prompt_debug_xml_composite(algo_meta, algo_metas, error_msg)
-  response = send_to_gpt(instructions_debug, prompt_debug, api_key, model, "high", "text", "medium")
+  response = send_to_llm(instructions_debug, prompt_debug, api_key, model, "high", "text", "medium")
 
   if apply_correction:
     instructions_apply = extract_text(agent_apply)
     prompt_apply = prompt_apply_xml(algo_meta, response)
-    response = send_to_gpt(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")
+    response = send_to_llm(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")
 
   return response
 
@@ -277,7 +313,7 @@ def create_debug_code_composite(api_key_path, agent_debug_code, agent_choose, ag
   instructions_debug = extract_text(agent_debug_code)
 
   prompt_debug = prompt_debug_composite(cyml_module, composite_meta, algo_metas, error_msg)
-  response = send_to_gpt(instructions_debug, prompt_debug, api_key, model, "high", "text", "medium")
+  response = send_to_llm(instructions_debug, prompt_debug, api_key, model, "high", "text", "medium")
 
   file_to_modify = ""
   response_xml = ""
@@ -286,7 +322,7 @@ def create_debug_code_composite(api_key_path, agent_debug_code, agent_choose, ag
   if apply_correction:
     instructions_choose = extract_text(agent_choose)
     prompt_code_or_xml = prompt_choose(response)
-    response_choose = send_to_gpt(instructions_choose, prompt_code_or_xml, api_key, model, "medium", "json_object", "low")
+    response_choose = send_to_llm(instructions_choose, prompt_code_or_xml, api_key, model, "medium", "json_object", "low")
     json_response = json.loads(response_choose)
 
     file_to_modify = json_response.get("modifs").get("type", "")
@@ -294,12 +330,12 @@ def create_debug_code_composite(api_key_path, agent_debug_code, agent_choose, ag
     if file_to_modify == "XML" or file_to_modify == "BOTH":
       instructions_apply = extract_text(agent_apply_xml)
       prompt_apply = prompt_apply_xml(composite_meta, response)
-      response_xml = send_to_gpt(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")
+      response_xml = send_to_llm(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")
       
     if file_to_modify == "CODEBASE" or file_to_modify == "BOTH":
       instructions_apply = extract_text(agent_apply_code)
       prompt_apply = prompt_apply_code_unit(cyml_module, error_msg, response)
-      response_code = send_to_gpt(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")   
+      response_code = send_to_llm(instructions_apply, prompt_apply, api_key, model, "medium", "text", "low")
 
   return response, response_xml, response_code, file_to_modify
 

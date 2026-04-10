@@ -111,6 +111,18 @@ def prompt_composite(XML_files, composite):
 # Function to create a prompt adapted to Agent-Debug for modelUnit
 # This function constructs a prompt based on the XML files of each model units.
 #-----------------------------------------------------------------
+def prompt_clean_code(cyml_module):
+  prompt = ""
+  prompt += f"Analyze and clean (if needed) the following codebase and follow the system instructions.\n"
+  prompt += f"The code is marked clearly with --- START CODE --- at the start and --- END CODE --- at the end.\n"
+  prompt += f"--- START CODE ---\n{extract_text(cyml_module)}\n--- END CODE ---\n\n"
+
+  return prompt
+
+#-----------------------------------------------------------------
+# Function to create a prompt adapted to Agent-Debug for modelUnit
+# This function constructs a prompt based on the XML files of each model units.
+#-----------------------------------------------------------------
 def prompt_debug_code_unit(cyml_module, algo_meta, error_msg):
   prompt = ""
   prompt += f"Analyze and debug the following codebase representing a crop model component and follow the system instructions.\n"

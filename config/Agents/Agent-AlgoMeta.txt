@@ -14,10 +14,10 @@ Output a single JSON object. Do not include any extra text, explanations, or key
 # DEFINITIONS
 - Parameter: Constant configuration value (unchanged during a run unless explicitly reconfigured).
 - Variable categories:
-	- state: Persisted across time steps and updated by the model.
+	- state: Persisted across time steps and updated by the model and variables calculated in the initialization.
 	- rate: Derivatives/fluxes affecting state changes within a time step.
 	- exogenous: External driven variables supplied from outside this component.
-	- auxiliary: Computed helper variables used across calls.
+	- auxiliary: Helper variables used across calls provided from other component.
 - Initialization function: Function that sets up initial state/parameters before the main simulation steps.
 - Major biophysical process function : The single function performing the core process for each step.
 - Supporting functions: Functions that implement domain logic.

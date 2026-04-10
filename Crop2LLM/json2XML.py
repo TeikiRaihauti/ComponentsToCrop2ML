@@ -268,7 +268,14 @@ def convert_composite(file_path, json_metadata, XML_units):
     root_unit = ET.fromstring(unit)
     unit_name = root_unit.attrib.get("name")
     for input_elem in root_unit.findall('.//Input'):
+      #is_state = False
       input_name = input_elem.attrib.get('name')
+      #input_type = input_elem.attrib.get('inputtype')
+      #if input_type == "variable":
+      #  input_category = input_elem.attrib.get('variablecategory')
+      #  if input_category == "state":
+      #    is_state = True
+      #if input_name not in internal_sources and not is_state:
       if input_name not in internal_sources:
         ET.SubElement(links_elem, 'InputLink', {
           'target': f"{unit_name}.{input_name}", 
@@ -287,11 +294,10 @@ def convert_composite(file_path, json_metadata, XML_units):
     unit_name = root_unit.attrib.get("name")
     for output_elem in root_unit.findall('.//Output'):
       output_name = output_elem.attrib.get('name')
-      if output_name not in internal_targets:
-        ET.SubElement(links_elem, 'OutputLink', {
-          'target': output_name,
-          'source': f"{unit_name}.{output_name}"
-        })
+      ET.SubElement(links_elem, 'OutputLink', {
+        'target': output_name,
+        'source': f"{unit_name}.{output_name}"
+      })
 
   for link in link_data:
     for unit_path in XML_units:
